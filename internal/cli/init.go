@@ -34,7 +34,7 @@ func newInitCmd(a *app) *cobra.Command {
 				return err
 			}
 
-			out := cmd.OutOrStdout()
+			out := a.stdout(cmd)
 			fmt.Fprint(out, "Identity created.\n\n")
 			if backup != "" {
 				fmt.Fprintf(out, "Previous identity kept at:\n  %s\n\n", display(backup))

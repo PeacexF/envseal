@@ -105,6 +105,25 @@ func TestDecryptedFileIsPrivate(t *testing.T) {
 	}
 }
 
+// Atomic writes go through a temporary file; none may survive the command.
+func TestDecryptLeavesNoTemporaryFiles(t *testing.T) {
+	dir := sealed(t)
+
+	if code, _, stderr := run(t, "decrypt"); code != 0 {
+		t.Fatalf("exit = %d (stderr: %s)", code, stderr)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".tmp") {
+			t.Errorf("%s survived the write", e.Name())
+		}
+	}
+}
+
 func TestDecryptToStdout(t *testing.T) {
 	sealed(t)
 

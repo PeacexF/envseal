@@ -29,6 +29,13 @@ type Error struct {
 	Detail  string
 	Checks  []string
 	cause   error
+	silent  bool
+}
+
+// Exit carries a child process's exit code without printing anything: the
+// child has already said whatever it had to say.
+func Exit(code int) *Error {
+	return &Error{Code: Code(code), Summary: fmt.Sprintf("exit status %d", code), silent: true}
 }
 
 func New(code Code, format string, args ...any) *Error {
@@ -87,6 +94,9 @@ func Render(w io.Writer, err error) {
 	e, ok := errors.AsType[*Error](err)
 	if !ok {
 		fmt.Fprintf(w, "Error: %s\n", err)
+		return
+	}
+	if e.silent {
 		return
 	}
 

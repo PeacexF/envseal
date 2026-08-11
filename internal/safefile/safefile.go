@@ -1,5 +1,11 @@
 // Package safefile writes files atomically: a reader never observes a partial
 // file, and a crash never leaves one behind.
+//
+// Atomic replacement requires a temporary file, so decrypted content does
+// briefly exist under a second name. That file is created 0600 in the
+// destination directory, never in a shared location such as /tmp, and is
+// removed on every error path. Only an uncatchable kill between the write and
+// the rename can leave it behind, and it is owner-only even then.
 package safefile
 
 import (

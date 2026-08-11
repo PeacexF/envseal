@@ -42,6 +42,17 @@ func Run(args []string, stdout, stderr io.Writer) int {
 // app holds the global flags shared by every command.
 type app struct {
 	identityPath string
+	quiet        bool
+}
+
+// stdout is where a command writes its progress chatter, which --quiet
+// discards. Payload output, such as decrypted content or JSON, always goes to
+// the real stream instead.
+func (a *app) stdout(cmd *cobra.Command) io.Writer {
+	if a.quiet {
+		return io.Discard
+	}
+	return cmd.OutOrStdout()
 }
 
 func NewRoot() *cobra.Command {
@@ -67,11 +78,19 @@ func NewRoot() *cobra.Command {
 
 	root.PersistentFlags().StringVar(&a.identityPath, "identity", "",
 		"path to your private identity (default ~/.envseal/identity)")
+	root.PersistentFlags().BoolVarP(&a.quiet, "quiet", "q", false,
+		"suppress progress output, leaving only errors")
 
 	root.AddCommand(
 		newInitCmd(a),
 		newEncryptCmd(a),
 		newDecryptCmd(a),
+		newRunCmd(a),
+		newAddCmd(a),
+		newRemoveCmd(a),
+		newRotateCmd(a),
+		newStatusCmd(a),
+		newCompletionCmd(),
 	)
 
 	return root

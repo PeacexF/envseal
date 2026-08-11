@@ -78,7 +78,7 @@ func newEncryptCmd(a *app) *cobra.Command {
 				return errs.New(errs.CodeGeneral, "unable to write %s", target).Wrap(err)
 			}
 
-			out := cmd.OutOrStdout()
+			out := a.stdout(cmd)
 			if created {
 				fmt.Fprintf(out, "Created %s with your identity as the only recipient.\n\n", display(ws.configPath()))
 			}

@@ -88,7 +88,7 @@ func newDecryptCmd(a *app) *cobra.Command {
 				return errs.New(errs.CodeGeneral, "unable to write %s", target).Wrap(err)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Decrypted %s → %s\n", display(source), display(target))
+			fmt.Fprintf(a.stdout(cmd), "Decrypted %s → %s\n", display(source), display(target))
 			return nil
 		},
 	}
