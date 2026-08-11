@@ -54,12 +54,44 @@ that older binaries refuse rather than misread.
 Publishing to a tap is optional. Without it the release still succeeds and only
 the Homebrew step is skipped, so this can wait until you want it.
 
-To enable it:
+### Create the tap
 
-1. Create a public repository named **`PeacexF/homebrew-tap`**.
-2. Create a fine-grained personal access token with **contents: write** on that
-   repository only.
-3. Add it to this repository as the secret `HOMEBREW_TAP_TOKEN`.
+Homebrew scaffolds it for you — no clicking through GitHub. See
+[How to Create and Maintain a Tap](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap).
+
+```bash
+brew tap-new PeacexF/homebrew-tap
+cd "$(brew --repository)/Library/Taps/peacexf/homebrew-tap"
+gh repo create PeacexF/homebrew-tap --public --source=. --push
+```
+
+The `homebrew-` prefix is what makes the short `brew install PeacexF/tap/envseal`
+form work.
+
+`tap-new` writes a README, a `Formula/` directory, and three workflows aimed at
+source-built formulae. Envseal ships prebuilt binaries, so GoReleaser publishes a
+**cask** into `Casks/` (which it creates on the first release) and `Formula/`
+stays empty. Two of the scaffolded workflows do not apply:
+
+```bash
+rm .github/workflows/publish.yml    # bottle publishing: casks have no bottles
+rm .github/workflows/autobump.yml   # GoReleaser bumps the version itself
+git commit -am "Remove formula-only workflows" && git push
+```
+
+Keep `tests.yml` if you want `brew test-bot` on pull requests to the tap; it is
+harmless either way, since GoReleaser commits to the default branch directly.
+
+### Give the release a token
+
+1. GitHub → Settings → Developer settings → **Fine-grained tokens**.
+2. Repository access: **only** `PeacexF/homebrew-tap`.
+3. Permissions: **Contents → Read and write**. Nothing else.
+4. Add it to `PeacexF/envseal` as the Actions secret `HOMEBREW_TAP_TOKEN`.
+
+Scope it to the tap alone. It is a write credential living in a CI system, which
+is the same trade [security.md](security.md) describes for CI identities: keep
+the blast radius to one repository that contains nothing secret.
 
 The next release writes `Casks/envseal.rb` there, and installation becomes:
 

@@ -35,6 +35,4 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Optional. Without it the release still succeeds and only the
-          # Homebrew step is skipped. See docs/releasing.md.
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
