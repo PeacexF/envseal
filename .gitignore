@@ -43,3 +43,4 @@ coverage.out
 .env.*
 !.env.example
 !*.enc
+scratch
