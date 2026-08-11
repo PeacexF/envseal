@@ -131,6 +131,36 @@ envseal pull
 envseal run -- ./server
 ```
 
+## Reviewing and validating
+
+`diff` makes an encrypted change reviewable without making it readable:
+
+```bash
+$ envseal diff
++ STRIPE_WEBHOOK_SECRET
+~ DATABASE_URL
+- OLD_API_KEY
+
+3 changes
+```
+
+`check` validates the project and catches the mistake that matters most — a
+plaintext `.env` committed to the repository:
+
+```bash
+$ envseal check
+ok   configuration   2 recipients
+ok   encrypted file  7 variables
+ok   schema          every variable in .env.example is present
+FAIL plaintext       committed to the repository, so the values are exposed
+    .env.production
+
+1 problem found.
+```
+
+Both exit non-zero on findings (`diff` needs `--exit-code`), so CI can gate on
+them, and both take `--json`.
+
 ## CI
 
 ```yaml
@@ -157,6 +187,8 @@ temporary files. Use a dedicated CI identity, never a personal one. See
 | `envseal add <name> <key>` | Authorize a public key |
 | `envseal remove <name>` | Withdraw a recipient |
 | `envseal rotate` | Re-encrypt for the current recipient list |
+| `envseal diff` | Show which variables changed, by name only |
+| `envseal check` | Validate the project, detect exposed plaintext |
 | `envseal status` | Show project state, `--json` for scripts |
 | `envseal completion <shell>` | bash, zsh, fish, powershell |
 

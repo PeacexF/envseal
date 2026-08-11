@@ -180,7 +180,7 @@ func publish(cmd *cobra.Command, a *app, repo *git.Repo, ws *workspace, opts pub
 		// Git pushes whole branches, so anything else waiting on this one goes
 		// too. Say so rather than letting it happen quietly.
 		if others, err := repo.Unpushed(upstream); err == nil && len(others) > 0 {
-			question += fmt.Sprintf("\n\nThis also pushes %s already on this branch:", plural(len(others), "commit"))
+			question += fmt.Sprintf("\n\nThis also pushes %s already on this branch:", plural(len(others), "other commit"))
 			for _, commit := range others {
 				question += "\n  " + commit
 			}
@@ -214,9 +214,9 @@ func publish(cmd *cobra.Command, a *app, repo *git.Repo, ws *workspace, opts pub
 // plural renders a count with its noun, so messages read naturally.
 func plural(n int, noun string) string {
 	if n == 1 {
-		return fmt.Sprintf("1 other %s", noun)
+		return "1 " + noun
 	}
-	return fmt.Sprintf("%d other %ss", n, noun)
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // sealedMatches reports whether the existing ciphertext already holds exactly

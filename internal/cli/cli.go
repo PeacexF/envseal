@@ -128,6 +128,8 @@ func newRoot(a *app) *cobra.Command {
 		newRemoveCmd(a),
 		newRotateCmd(a),
 		newStatusCmd(a),
+		newDiffCmd(a),
+		newCheckCmd(a),
 		newCompletionCmd(),
 	)
 

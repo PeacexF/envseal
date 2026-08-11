@@ -75,6 +75,23 @@ feature, not a bug. A fork PR will fail with exit 4 (no identity). Either skip
 the sealed steps for forks, or use `pull_request_target` with a full
 understanding of what that opens up.
 
+Validate the environment on every pull request. This job needs no identity for
+the plaintext check, which is the one that catches a committed `.env`:
+
+```yaml
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install github.com/PeacexF/envseal/cmd/envseal@latest
+      - env:
+          ENVSEAL_IDENTITY: ${{ secrets.ENVSEAL_IDENTITY }}
+        run: envseal check --strict
+```
+
 Verify access before a long job, so failures are legible:
 
 ```yaml

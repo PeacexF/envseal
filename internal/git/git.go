@@ -210,6 +210,18 @@ func resolve(path string) string {
 	return path
 }
 
+// Tracked lists every file in the index, relative to the repository root.
+func (r *Repo) Tracked() ([]string, error) {
+	out, err := run(r.Root, "ls-files")
+	if err != nil {
+		return nil, gitError("list tracked files", err)
+	}
+	if out == "" {
+		return nil, nil
+	}
+	return strings.Split(out, "\n"), nil
+}
+
 // Unpushed lists the commits on the current branch that the upstream lacks.
 func (r *Repo) Unpushed(upstream string, paths ...string) ([]string, error) {
 	args := append([]string{"log", "--oneline", "--no-decorate", upstream + "..HEAD", "--"}, paths...)

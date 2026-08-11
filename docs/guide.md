@@ -14,17 +14,18 @@ and [Daily use](#daily-use). Everything after that is there when you need it.
 4. [What to commit](#what-to-commit)
 5. [Daily use](#daily-use)
 6. [Sharing through Git](#sharing-through-git)
-7. [Changing a secret](#changing-a-secret)
-8. [Working with other people](#working-with-other-people)
-9. [Removing someone](#removing-someone)
-10. [Multiple environments](#multiple-environments)
-11. [Docker and Compose](#docker-and-compose)
-12. [Continuous integration](#continuous-integration)
-13. [Scripting envseal](#scripting-envseal)
-14. [Shell completion](#shell-completion)
-15. [The .env format](#the-env-format)
-16. [Exit codes](#exit-codes)
-17. [Troubleshooting](#troubleshooting)
+7. [Reviewing and validating](#reviewing-and-validating)
+8. [Changing a secret](#changing-a-secret)
+9. [Working with other people](#working-with-other-people)
+10. [Removing someone](#removing-someone)
+11. [Multiple environments](#multiple-environments)
+12. [Docker and Compose](#docker-and-compose)
+13. [Continuous integration](#continuous-integration)
+14. [Scripting envseal](#scripting-envseal)
+15. [Shell completion](#shell-completion)
+16. [The .env format](#the-env-format)
+17. [Exit codes](#exit-codes)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -440,6 +441,101 @@ the new list, even when the environment values themselves are unchanged. Use
 
 Both commands degrade gracefully. With no Git repository they behave as
 `encrypt` and `decrypt`, and say so.
+
+---
+
+## Reviewing and validating
+
+Two commands answer questions about a sealed environment without opening it to
+anyone watching.
+
+### `envseal diff`
+
+What has changed, by name:
+
+```
+$ envseal diff
++ STRIPE_WEBHOOK_SECRET
+~ DATABASE_URL
+- OLD_API_KEY
+
+3 changes
+```
+
+`+` added, `~` value changed, `-` removed. Unchanged variables are not listed,
+and **no value is ever printed** — that is the entire point. A reviewer can see
+that a commit rotates `DATABASE_URL` and adds a webhook secret without being
+able to read either.
+
+With no arguments it compares your working `.env` against the encrypted file,
+which answers "what have I changed that is not sealed yet". To compare against
+another revision instead:
+
+```bash
+envseal diff --ref HEAD           # what does my working copy change?
+envseal diff --ref origin/main    # what does my branch change?
+```
+
+| Flag | Effect |
+|---|---|
+| `--ref <rev>` | Compare the encrypted file against a git revision |
+| `--json` | `{"added": [...], "changed": [...], "removed": [...]}` |
+| `--exit-code` | Exit 1 when anything differs, for scripts and hooks |
+
+`--exit-code` makes a useful guard: `envseal diff --exit-code` fails when your
+`.env` has drifted from `.env.enc`, so you notice before committing.
+
+### `envseal check`
+
+Validates the project and, most importantly, catches plaintext that git can see:
+
+```
+$ envseal check
+ok   configuration   2 recipients
+ok   encrypted file  7 variables
+ok   schema          every variable in .env.example is present
+FAIL plaintext       committed to the repository, so the values are exposed
+    .env.production
+
+1 problem found.
+```
+
+Four checks:
+
+1. **configuration** — `.envseal.yaml` parses and lists at least one recipient.
+2. **encrypted file** — it exists and opens with your identity.
+3. **schema** — every variable named in `.env.example` is present in the
+   environment. Extra variables are fine; only missing ones are reported, since
+   an environment usually has more than the example documents.
+4. **plaintext** — no unencrypted environment file is **tracked by git**
+   (a failure: the values are already exposed) or merely **unignored**
+   (a warning: one `git add .` from becoming a failure).
+
+`.env.example`, `.env.sample`, `.env.template`, `.env.dist` and anything ending
+in `.enc` are recognised as safe and never reported.
+
+A check that cannot run reports **skipped**, not failed — no identity in this
+environment, no git repository, no example file. Skipped is not a problem, so
+`check` still exits 0.
+
+| Flag | Effect |
+|---|---|
+| `--strict` | Treat warnings as failures |
+| `--schema <file>` | Use a different file as the list of expected variables |
+| `--json` | Machine-readable findings |
+
+Exits 1 when anything failed, which is what makes it useful in CI:
+
+```yaml
+- name: Validate the environment
+  env:
+    ENVSEAL_IDENTITY: ${{ secrets.ENVSEAL_IDENTITY }}
+  run: envseal check --strict
+```
+
+Without an identity the schema and decryption checks are skipped, but the
+plaintext detection still runs — so even a job with no secrets can catch a
+committed `.env`.
 
 ---
 

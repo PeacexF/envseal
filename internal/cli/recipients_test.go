@@ -259,6 +259,17 @@ func TestRotateOutsideAProject(t *testing.T) {
 	}
 }
 
+// newIdentityOnly creates an identity that is not a recipient of anything.
+func newIdentityOnly(t *testing.T) string {
+	t.Helper()
+
+	path := filepath.Join(t.TempDir(), "identity")
+	if code, _, stderr := run(t, "--identity", path, "init"); code != 0 {
+		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
+	}
+	return path
+}
+
 // newIdentity creates an identity elsewhere, authorizes it under name, and
 // returns its path. The project is not re-encrypted: that is rotate's job.
 func newIdentity(t *testing.T, name string) string {

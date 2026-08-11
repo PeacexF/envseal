@@ -216,36 +216,19 @@ func summarize(w io.Writer, before, after []byte, source string) {
 		return
 	}
 
-	oldValues, newValues := old.Map(), updated.Map()
-
-	var added, changed, removed []string
-	for _, key := range updated.Keys() {
-		previous, existed := oldValues[key]
-		switch {
-		case !existed:
-			added = append(added, key)
-		case previous != newValues[key]:
-			changed = append(changed, key)
-		}
-	}
-	for _, key := range old.Keys() {
-		if _, still := newValues[key]; !still {
-			removed = append(removed, key)
-		}
-	}
-
-	if len(added)+len(changed)+len(removed) == 0 {
+	delta := dotenv.Compare(old, updated)
+	if delta.Empty() {
 		return
 	}
 
 	fmt.Fprintln(w)
-	for _, key := range added {
+	for _, key := range delta.Added {
 		fmt.Fprintf(w, "+ %s\n", key)
 	}
-	for _, key := range changed {
+	for _, key := range delta.Changed {
 		fmt.Fprintf(w, "~ %s\n", key)
 	}
-	for _, key := range removed {
+	for _, key := range delta.Removed {
 		fmt.Fprintf(w, "- %s\n", key)
 	}
 }
