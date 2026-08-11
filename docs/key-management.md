@@ -24,7 +24,7 @@ decrypts every project that lists your public key.
 ## Creating one
 
 ```bash
-envseal init
+envseal keys generate
 ```
 
 Written to `~/.envseal/identity` with mode `0600` inside a `0700` directory.
@@ -34,19 +34,23 @@ To keep an identity somewhere else — a second key for a specific purpose, a
 removable drive, a CI key you are about to upload:
 
 ```bash
-envseal init --identity ./ci-identity
+envseal keys generate --identity ./ci-identity
 ```
 
 ## Finding your public key
 
 ```bash
-grep 'public key' ~/.envseal/identity
+envseal keys public
 ```
 
-Or, from any project you can read:
+```
+age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
+```
+
+It prints one line and nothing else, so it pipes cleanly:
 
 ```bash
-envseal status
+envseal keys public | pbcopy
 ```
 
 Your public key is not secret. Post it in a channel, put it in a pull request,
@@ -55,7 +59,7 @@ print it on a mug.
 ## Replacing an identity
 
 ```bash
-envseal init --force
+envseal keys generate --force
 ```
 
 This generates a new key and moves the old one to
@@ -80,22 +84,23 @@ have.
 
 ```bash
 envseal add alice age1lggyhqrw2nlhcxprm67z43rta597azn8gknawjehu9d9dl0jq3yqqvfafg
-envseal rotate
+envseal reseal
 git commit -am "Grant alice access"
 ```
 
 Two steps, on purpose:
 
 - `add` records the key in `.envseal.yaml`. Nothing is re-encrypted.
-- `rotate` decrypts with your identity and re-encrypts for the current list.
+- `reseal` decrypts with your identity and re-encrypts for the current list.
+  `envseal push` does the same thing when it notices the pending change.
 
-Until you rotate, Alice holds a key that opens nothing.
+Until then, Alice holds a key that opens nothing.
 
 ## Withdrawing access
 
 ```bash
 envseal remove alice
-envseal rotate
+envseal reseal
 git commit -am "Revoke alice"
 ```
 
@@ -116,21 +121,27 @@ security action.
 The routine after someone leaves, or after any suspected exposure:
 
 1. Change each credential at its source (cloud console, database, provider).
-2. `envseal decrypt` and edit `.env` with the new values.
-3. `envseal encrypt .env && rm .env`.
-4. Commit and deploy.
+2. Put the new value in, one variable at a time, without writing plaintext:
+
+   ```bash
+   envseal rotate STRIPE_SECRET_KEY      # typed, hidden
+   envseal rotate SESSION_SECRET --generate
+   ```
+3. `envseal push` to share them.
 
 Envseal cannot automate step 1, and neither can any tool that does not hold your
-provider credentials.
+provider credentials. Step 2 is the part it makes safe: the environment is
+decrypted in memory, one value is replaced, and it is sealed again — the
+plaintext never reaches the disk.
 
 ## Machine and CI identities
 
 Give every non-human consumer its own identity:
 
 ```bash
-envseal init --identity ./deploy-identity
+envseal keys generate --identity ./deploy-identity
 envseal add deploy "$(grep -o 'age1[a-z0-9]*' deploy-identity)"
-envseal rotate
+envseal reseal
 # store the file contents in your secret manager, then
 rm deploy-identity
 ```
@@ -153,9 +164,9 @@ laptop and permanently unreadable secrets.
 To create a backup identity:
 
 ```bash
-envseal init --identity ./backup-identity
+envseal keys generate --identity ./backup-identity
 envseal add backup "$(grep -o 'age1[a-z0-9]*' backup-identity)"
-envseal rotate
+envseal reseal
 # store backup-identity somewhere offline, then remove the local copy
 rm backup-identity
 ```

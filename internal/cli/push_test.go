@@ -23,8 +23,8 @@ func gitRepo(t *testing.T) (dir, remote string) {
 	mustGit(t, dir, "config", "user.name", "Test")
 
 	t.Chdir(dir)
-	if code, _, stderr := run(t, "init"); code != 0 {
-		t.Fatalf("envseal init: exit = %d (stderr: %s)", code, stderr)
+	if code, _, stderr := run(t, "keys", "generate"); code != 0 {
+		t.Fatalf("keys generate: exit = %d (stderr: %s)", code, stderr)
 	}
 
 	writeEnv(t, dir, ".gitignore", ".env\n")

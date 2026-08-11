@@ -84,7 +84,7 @@ func TestStatusJSONShowsNoSecrets(t *testing.T) {
 func TestStatusReportsLostAccess(t *testing.T) {
 	sealed(t)
 	other := filepath.Join(t.TempDir(), "identity")
-	if code, _, stderr := run(t, "--identity", other, "init"); code != 0 {
+	if code, _, stderr := run(t, "--identity", other, "keys", "generate"); code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}
 
@@ -97,7 +97,7 @@ func TestStatusReportsLostAccess(t *testing.T) {
 	}
 
 	_, stdout, _ := run(t, "--identity", other, "status")
-	if !strings.Contains(stdout, "envseal rotate") {
+	if !strings.Contains(stdout, "envseal push") {
 		t.Errorf("stdout =\n%s\nwant advice on regaining access", stdout)
 	}
 }
@@ -109,7 +109,7 @@ func TestStatusWithoutProject(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
-	if !strings.Contains(stdout, "envseal encrypt") {
+	if !strings.Contains(stdout, "envseal init") {
 		t.Errorf("stdout =\n%s\nwant it to explain how to start", stdout)
 	}
 
@@ -129,8 +129,8 @@ func TestStatusWithoutIdentity(t *testing.T) {
 	}
 
 	_, stdout, _ := run(t, "--identity", absent, "status")
-	if !strings.Contains(stdout, "envseal init") {
-		t.Errorf("stdout =\n%s\nwant it to suggest `envseal init`", stdout)
+	if !strings.Contains(stdout, "envseal keys generate") {
+		t.Errorf("stdout =\n%s\nwant it to suggest generating an identity", stdout)
 	}
 }
 

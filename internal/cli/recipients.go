@@ -18,18 +18,20 @@ const (
 	addLong = `Authorize a public key to decrypt this project.
 
 Adding a recipient changes the configuration only. The encrypted file still
-holds the old recipient list until you re-encrypt it with ` + "`envseal rotate`" + `.`
+holds the old recipient list until you re-encrypt it with ` + "`envseal reseal`" + `
+or share it with ` + "`envseal push`" + `.`
 
 	removeLong = `Withdraw a recipient's access.
 
-The encrypted file is unchanged until you run ` + "`envseal rotate`" + `. Anyone who
+The encrypted file is unchanged until you run ` + "`envseal reseal`" + `. Anyone who
 already has a copy of the old file can still read it with their key, so treat
 any secret they held as compromised and rotate its value at the source.`
 
-	rotateLong = `Re-encrypt the environment for the current recipient list.
+	resealLong = `Re-encrypt the environment for the current recipient list.
 
-Run this after adding or removing a recipient. Rotation decrypts with your
-identity and re-encrypts in memory; the plaintext never touches the disk.`
+Run this after adding or removing a recipient. It decrypts with your identity
+and re-encrypts in memory; the plaintext never touches the disk. The values
+themselves are unchanged — use ` + "`envseal rotate <VARIABLE>`" + ` for that.`
 )
 
 func newAddCmd(a *app) *cobra.Command {
@@ -45,7 +47,7 @@ func newAddCmd(a *app) *cobra.Command {
 			if err := config.ValidateKey(key); err != nil {
 				return errs.New(errs.CodeConfig, "invalid public key for %q", name).
 					Detailf("%s.", err).
-					Check("public keys look like age1... and are printed by `envseal init`")
+					Check("public keys look like age1... and are printed by `envseal keys public`")
 			}
 
 			ws, err := a.workspace()
@@ -73,7 +75,7 @@ func newAddCmd(a *app) *cobra.Command {
 
 			out := a.stdout(cmd)
 			fmt.Fprintf(out, "Added %s to %s\n", name, display(ws.configPath()))
-			fmt.Fprintf(out, "\nRun `envseal rotate` to give them access to the current secrets.\n")
+			fmt.Fprintf(out, "\nRun `envseal reseal` to give them access to the current secrets.\n")
 			return nil
 		},
 	}
@@ -119,7 +121,7 @@ func newRemoveCmd(a *app) *cobra.Command {
 			if len(c.Recipients) == 0 {
 				fmt.Fprint(out, "\nNo recipients remain. Add one before encrypting again.\n")
 			} else {
-				fmt.Fprint(out, "\nRun `envseal rotate` to re-encrypt without them.\n")
+				fmt.Fprint(out, "\nRun `envseal reseal` to re-encrypt without them.\n")
 			}
 			fmt.Fprint(out, "Anyone holding an older copy of the encrypted file can still read it, so rotate the secrets themselves.\n")
 			return nil
@@ -127,11 +129,11 @@ func newRemoveCmd(a *app) *cobra.Command {
 	}
 }
 
-func newRotateCmd(a *app) *cobra.Command {
+func newResealCmd(a *app) *cobra.Command {
 	return &cobra.Command{
-		Use:   "rotate",
+		Use:   "reseal",
 		Short: "Re-encrypt for the current recipients",
-		Long:  rotateLong,
+		Long:  resealLong,
 		Args:  cobra.NoArgs,
 
 		RunE: func(cmd *cobra.Command, _ []string) error {

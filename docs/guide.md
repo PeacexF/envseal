@@ -62,7 +62,7 @@ obvious.
 | Piece | Where it lives | Secret? | What it is |
 |---|---|---|---|
 | **Identity** | `~/.envseal/identity` | **Yes** | Your private key. It decrypts. Never leaves your machine. |
-| **Public key** | printed by `envseal init` | No | Derived from your identity. Give it to anyone. |
+| **Public key** | `envseal keys public` | No | Derived from your identity. Give it to anyone. |
 | **Encrypted file** | `.env.enc` in your repo | No | Your secrets, encrypted for a list of public keys. Commit it. |
 | **Configuration** | `.envseal.yaml` in your repo | No | Which public keys may decrypt. Commit it. |
 
@@ -101,7 +101,7 @@ DEBUG=false
 Once per machine, not once per project:
 
 ```bash
-envseal init
+envseal keys generate
 ```
 
 ```
@@ -119,24 +119,38 @@ Share the public identity freely. Never share or commit the private one.
 The private identity is written with owner-only permissions (`0600`) inside a
 `0700` directory. Envseal never prints it.
 
-If an identity already exists, `init` refuses rather than replacing it, because
+If an identity already exists, it refuses rather than replacing it, because
 overwriting a private key permanently destroys access to everything encrypted
-for it. `envseal init --force` replaces it *and* keeps the old one as a
+for it. `envseal keys generate --force` replaces it *and* keeps the old one as a
 timestamped `.bak` file beside it.
 
-### 2. Encrypt
+### 2. Set the project up
+
+```bash
+envseal init
+```
+
+```
+Created .envseal.yaml with your key as the only recipient
+Created .env.example from .env (3 variables, no values)
+Created .gitignore (+4 rules)
+
+Next: `envseal encrypt .env` to seal your environment.
+```
+
+This writes the configuration, an example file listing your variable **names**
+with empty values, and the ignore rules below. It is safe to run again: existing
+files are reported and left alone.
+
+### 3. Encrypt
 
 ```bash
 envseal encrypt .env
 ```
 
 ```
-Created .envseal.yaml with your identity as the only recipient.
-
 Encrypted .env → .env.enc
 Recipients: you
-
-Commit .env.enc and .envseal.yaml. Keep .env out of Git.
 ```
 
 Two files appeared. `.env.enc` holds the ciphertext:
@@ -164,7 +178,7 @@ recipients:
     key: age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
 ```
 
-### 3. Check your work
+### 4. Check your work
 
 ```bash
 envseal status
@@ -435,7 +449,7 @@ envseal push
 
 `push` notices that `.envseal.yaml` has uncommitted changes and re-encrypts for
 the new list, even when the environment values themselves are unchanged. Use
-`envseal rotate` when you want to re-encrypt without touching `.env` at all.
+`envseal reseal` when you want to re-encrypt without touching `.env` at all.
 
 ### Outside a repository
 
@@ -541,14 +555,44 @@ committed `.env`.
 
 ## Changing a secret
 
-There is no `envseal edit` yet, so the cycle is explicit:
+For one variable, `rotate` does it without plaintext ever reaching the disk:
+
+```bash
+$ envseal rotate STRIPE_SECRET_KEY
+New value for STRIPE_SECRET_KEY:
+Read 32 characters.
+Rotated STRIPE_SECRET_KEY in .env.enc for 3 recipients.
+Updated .env to match.
+```
+
+The value is typed without echo. Envseal decrypts in memory, replaces that one
+value, and encrypts again. **Every other line survives byte for byte** —
+comments, blank lines, ordering, and the quoting of other variables.
+
+| Way to supply the value | When |
+|---|---|
+| typed at the prompt | the default; nothing is echoed or stored |
+| `--stdin` | scripts: `pass show api \| envseal rotate API_KEY --stdin` |
+| `--generate` | tokens you never need to see; `--length` sets the size |
+
+There is deliberately **no `--value` flag**. A secret passed as an argument is
+written to your shell history and is visible in `ps` to every user on the
+machine, which would undo the point of the command.
+
+Rotating a name that does not exist is refused, since it is nearly always a
+typo; pass `--add` when you mean it.
+
+If a local `.env` exists and matches the sealed environment, it is updated too.
+Leaving it stale would be worse: the next `envseal push` would encrypt the old
+value and quietly undo the rotation.
+
+### Changing several at once
 
 ```bash
 envseal decrypt          # .env.enc → .env
 $EDITOR .env             # change what you need
 envseal encrypt .env     # .env → .env.enc
 rm .env                  # remove the plaintext
-git commit .env.enc -m "Rotate API key"
 ```
 
 `encrypt` parses the file before encrypting it. A typo fails immediately with
@@ -564,8 +608,9 @@ encrypted, not when they clone the repository.**
 
 ### Adding a teammate
 
-Alice runs `envseal init` on her own machine and sends you her **public** key —
-Slack, email, a pull request, anywhere. It is not a secret.
+Alice runs `envseal keys generate` on her own machine, then `envseal keys public`
+and sends you the line it prints — Slack, email, a pull request, anywhere. It is
+not a secret.
 
 You authorize it:
 
@@ -576,22 +621,22 @@ envseal add alice age1lggyhqrw2nlhcxprm67z43rta597azn8gknawjehu9d9dl0jq3yqqvfafg
 ```
 Added alice to .envseal.yaml
 
-Run `envseal rotate` to give them access to the current secrets.
+Run `envseal reseal` to give them access to the current secrets.
 ```
 
 `add` only edits the configuration. The encrypted file still holds the old
 recipient list, so Alice cannot read anything yet. Grant the access:
 
 ```bash
-envseal rotate
+envseal reseal
 ```
 
 ```
 Re-encrypted .env.enc for 2 recipient(s): you, alice
 ```
 
-Commit both files. Alice clones, runs `envseal init` if she has not already, and
-is immediately productive:
+Commit both files. Alice clones, runs `envseal keys generate` if she has not
+already, and is immediately productive:
 
 ```bash
 git pull
@@ -606,8 +651,8 @@ re-encrypting every secret in the repository should not be the same keystroke.
 For the new person:
 
 ```bash
-envseal init                 # once per machine
-# send the printed public key to someone already on the project
+envseal keys generate        # once per machine
+envseal keys public          # send this line to someone on the project
 # wait for them to add you and rotate
 git pull
 envseal status               # Local access should show ✓
@@ -620,13 +665,13 @@ envseal run -- ./server
 
 ```bash
 envseal remove alice
-envseal rotate
+envseal reseal
 ```
 
 ```
 Removed alice from .envseal.yaml
 
-Run `envseal rotate` to re-encrypt without them.
+Run `envseal reseal` to re-encrypt without them.
 Anyone holding an older copy of the encrypted file can still read it, so rotate the secrets themselves.
 ```
 
@@ -751,9 +796,9 @@ temporary files.
 Generate a dedicated CI identity rather than reusing a personal one:
 
 ```bash
-envseal init --identity ./ci-identity
+envseal keys generate --identity ./ci-identity
 envseal add ci "$(grep -o 'age1[a-z0-9]*' ci-identity)"
-envseal rotate
+envseal reseal
 # paste the contents of ./ci-identity into your CI secret store, then:
 rm ci-identity
 ```
@@ -898,12 +943,12 @@ The file was not encrypted for the identity you are using.
 ```
 
 Your key was not a recipient when the file was last encrypted. Either you were
-never added, or someone added you but did not run `envseal rotate`. Check with
+never added, or someone added you but did not run `envseal reseal`. Check with
 `envseal status`, then ask a current recipient:
 
 ```bash
 envseal add you age1yourkey...
-envseal rotate
+envseal reseal
 git commit -am "Grant access"
 ```
 
@@ -912,7 +957,7 @@ and `ENVSEAL_IDENTITY` both override the default.
 
 ### `no identity at ~/.envseal/identity`
 
-Run `envseal init`. If your identity lives elsewhere, point at it:
+Run `envseal keys generate`. If your identity lives elsewhere, point at it:
 
 ```bash
 export ENVSEAL_IDENTITY=/path/to/identity
@@ -945,7 +990,7 @@ envseal add you age1yourkey...
 
 ### `ENVSEAL_IDENTITY already holds an identity`
 
-You ran `envseal init` while the environment variable contained key material.
+You ran `envseal keys generate` while the variable contained key material.
 The file would be written and then ignored, because the variable takes
 precedence. Unset it, or choose an explicit path with `--identity`.
 

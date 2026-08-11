@@ -8,9 +8,9 @@ binary, and give it an identity.
 **Use a dedicated CI identity.** Never upload a personal key to a build system.
 
 ```bash
-envseal init --identity ./ci-identity
+envseal keys generate --identity ./ci-identity
 envseal add ci "$(grep -o 'age1[a-z0-9]*' ci-identity)"
-envseal rotate
+envseal reseal
 cat ci-identity          # paste this into your CI secret store
 rm ci-identity           # then delete the local copy
 git commit -am "Authorize CI"
@@ -220,7 +220,7 @@ behaves exactly as it would without it.
 variable name, and remember that fork pull requests get no secrets.
 
 **Exit 3, `not encrypted for the identity you are using`** — the CI key was
-added but nobody ran `envseal rotate`, or the rotation was never committed.
+added but nobody ran `envseal reseal`, or the rotation was never committed.
 Run `envseal status --json` locally and confirm the CI key is in
 `recipient_names`, then check that `.env.enc` was committed after the rotate.
 

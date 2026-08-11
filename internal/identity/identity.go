@@ -86,7 +86,7 @@ func Create(path string, force bool) (*Identity, string, error) {
 	case err == nil && !force:
 		return nil, "", errs.New(errs.CodeIdentity, "an identity already exists at %s", path).
 			Detailf("Replacing it would permanently lose access to everything encrypted for it.").
-			Check("run `envseal init --force` to replace it, keeping a backup of the old one",
+			Check("run `envseal keys generate --force` to replace it, keeping a backup of the old one",
 				"pass --identity <path> to create a second identity elsewhere")
 	case err != nil && !errors.Is(err, fs.ErrNotExist):
 		return nil, "", errs.New(errs.CodeIdentity, "unable to inspect %s", path).Wrap(err)
@@ -128,7 +128,7 @@ func Load(path string) (*Identity, error) {
 		if errors.Is(err, fs.ErrNotExist) {
 			return nil, errs.New(errs.CodeIdentity, "no identity at %s", path).
 				Detailf("An identity is the private key that decrypts your environment.").
-				Check("run `envseal init` to create one",
+				Check("run `envseal keys generate` to create one",
 					"set "+EnvVar+" if your identity lives elsewhere").
 				Wrap(ErrNotFound)
 		}
@@ -157,7 +157,7 @@ func Parse(data []byte, source string) (*Identity, error) {
 	invalid := func() error {
 		return errs.New(errs.CodeIdentity, "no usable identity in %s", source).
 			Detailf("Expected an age private key beginning with %s.", KeyPrefix).
-			Check("regenerate it with `envseal init`",
+			Check("regenerate it with `envseal keys generate`",
 				"confirm you copied the private identity, not the public key")
 	}
 
@@ -200,7 +200,7 @@ func Resolve(flagPath string) (*Identity, error) {
 	return Load(path)
 }
 
-// Destination reports where `envseal init` should write a new identity.
+// Destination reports where `envseal keys generate` should write a new identity.
 func Destination(flagPath string) (string, error) {
 	if flagPath != "" {
 		return flagPath, nil

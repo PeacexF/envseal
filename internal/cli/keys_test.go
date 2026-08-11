@@ -19,10 +19,10 @@ func isolate(t *testing.T) string {
 	return home
 }
 
-func TestInit(t *testing.T) {
+func TestKeysGenerate(t *testing.T) {
 	home := isolate(t)
 
-	code, stdout, stderr := run(t, "init")
+	code, stdout, stderr := run(t, "keys", "generate")
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
@@ -39,10 +39,10 @@ func TestInit(t *testing.T) {
 }
 
 // The private key must never reach a terminal, a log, or a CI transcript.
-func TestInitNeverPrintsPrivateKey(t *testing.T) {
+func TestKeysGenerateNeverPrintsPrivateKey(t *testing.T) {
 	isolate(t)
 
-	_, stdout, stderr := run(t, "init")
+	_, stdout, stderr := run(t, "keys", "generate")
 	for name, out := range map[string]string{"stdout": stdout, "stderr": stderr} {
 		if strings.Contains(out, identity.KeyPrefix) {
 			t.Errorf("%s contains private key material:\n%s", name, out)
@@ -50,14 +50,14 @@ func TestInitNeverPrintsPrivateKey(t *testing.T) {
 	}
 }
 
-func TestInitRefusesExisting(t *testing.T) {
+func TestKeysGenerateRefusesExisting(t *testing.T) {
 	isolate(t)
 
-	if code, _, stderr := run(t, "init"); code != 0 {
-		t.Fatalf("first init: exit = %d (stderr: %s)", code, stderr)
+	if code, _, stderr := run(t, "keys", "generate"); code != 0 {
+		t.Fatalf("first generate: exit = %d (stderr: %s)", code, stderr)
 	}
 
-	code, _, stderr := run(t, "init")
+	code, _, stderr := run(t, "keys", "generate")
 	if code != 4 {
 		t.Errorf("exit = %d, want 4", code)
 	}
@@ -69,14 +69,14 @@ func TestInitRefusesExisting(t *testing.T) {
 	}
 }
 
-func TestInitForce(t *testing.T) {
+func TestKeysGenerateForce(t *testing.T) {
 	home := isolate(t)
 
-	if code, _, stderr := run(t, "init"); code != 0 {
-		t.Fatalf("first init: exit = %d (stderr: %s)", code, stderr)
+	if code, _, stderr := run(t, "keys", "generate"); code != 0 {
+		t.Fatalf("first generate: exit = %d (stderr: %s)", code, stderr)
 	}
 
-	code, stdout, stderr := run(t, "init", "--force")
+	code, stdout, stderr := run(t, "keys", "generate", "--force")
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
@@ -93,11 +93,11 @@ func TestInitForce(t *testing.T) {
 	}
 }
 
-func TestInitIdentityFlag(t *testing.T) {
+func TestKeysGenerateIdentityFlag(t *testing.T) {
 	isolate(t)
 	path := filepath.Join(t.TempDir(), "custom", "identity")
 
-	code, _, stderr := run(t, "--identity", path, "init")
+	code, _, stderr := run(t, "--identity", path, "keys", "generate")
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
@@ -106,13 +106,13 @@ func TestInitIdentityFlag(t *testing.T) {
 	}
 }
 
-func TestInitAbbreviatesHomeDirectory(t *testing.T) {
+func TestKeysGenerateAbbreviatesHomeDirectory(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("~ abbreviation is a Unix convention")
 	}
 	home := isolate(t)
 
-	_, stdout, _ := run(t, "init")
+	_, stdout, _ := run(t, "keys", "generate")
 	if !strings.Contains(stdout, "~/"+identity.Dir) {
 		t.Errorf("stdout =\n%s\nwant the path abbreviated to ~", stdout)
 	}
@@ -121,15 +121,52 @@ func TestInitAbbreviatesHomeDirectory(t *testing.T) {
 	}
 }
 
-func TestInitRejectsEnvKeyMaterial(t *testing.T) {
+func TestKeysGenerateRejectsEnvKeyMaterial(t *testing.T) {
 	isolate(t)
 	t.Setenv(identity.EnvVar, identity.KeyPrefix+"WHATEVER")
 
-	code, _, stderr := run(t, "init")
+	code, _, stderr := run(t, "keys", "generate")
 	if code != 4 {
 		t.Errorf("exit = %d, want 4", code)
 	}
 	if !strings.Contains(stderr, identity.EnvVar) {
 		t.Errorf("stderr =\n%s\nwant it to name "+identity.EnvVar, stderr)
+	}
+}
+
+func TestKeysPublic(t *testing.T) {
+	isolate(t)
+	if code, _, stderr := run(t, "keys", "generate"); code != 0 {
+		t.Fatalf("generate: exit = %d (stderr: %s)", code, stderr)
+	}
+
+	code, stdout, stderr := run(t, "keys", "public")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+
+	key := strings.TrimSpace(stdout)
+	if !strings.HasPrefix(key, "age1") {
+		t.Errorf("stdout = %q, want a public key on its own line", stdout)
+	}
+	if strings.Contains(stdout, identity.KeyPrefix) {
+		t.Errorf("stdout leaked the private key:\n%s", stdout)
+	}
+
+	// It is the payload, so --quiet must not silence it.
+	if _, quiet, _ := run(t, "--quiet", "keys", "public"); strings.TrimSpace(quiet) != key {
+		t.Errorf("--quiet output = %q, want the key", quiet)
+	}
+}
+
+func TestKeysPublicWithoutIdentity(t *testing.T) {
+	isolate(t)
+
+	code, _, stderr := run(t, "keys", "public")
+	if code != 4 {
+		t.Errorf("exit = %d, want 4", code)
+	}
+	if !strings.Contains(stderr, "envseal keys generate") {
+		t.Errorf("stderr =\n%s\nwant it to suggest generating one", stderr)
 	}
 }

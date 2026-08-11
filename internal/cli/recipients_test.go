@@ -30,8 +30,8 @@ func TestAdd(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
-	if !strings.Contains(stdout, "envseal rotate") {
-		t.Errorf("stdout =\n%s\nwant a reminder to rotate", stdout)
+	if !strings.Contains(stdout, "envseal reseal") {
+		t.Errorf("stdout =\n%s\nwant a reminder to re-encrypt", stdout)
 	}
 
 	c := loadConfig(t, dir)
@@ -162,18 +162,18 @@ func TestRemoveOwnKeyWarns(t *testing.T) {
 	}
 }
 
-func TestRotateGivesAccessToANewRecipient(t *testing.T) {
+func TestResealGivesAccessToANewRecipient(t *testing.T) {
 	sealed(t)
 
 	// A second identity, added as a recipient but not yet able to read.
 	second := newIdentity(t, "second")
 
 	if code, _, _ := run(t, "--identity", second, "decrypt", "-o", "-"); code != 3 {
-		t.Errorf("before rotate: exit = %d, want 3", code)
+		t.Errorf("before reseal: exit = %d, want 3", code)
 	}
 
-	if code, stdout, stderr := run(t, "rotate"); code != 0 {
-		t.Fatalf("rotate: exit = %d (stderr: %s)", code, stderr)
+	if code, stdout, stderr := run(t, "reseal"); code != 0 {
+		t.Fatalf("reseal: exit = %d (stderr: %s)", code, stderr)
 	} else if !strings.Contains(stdout, "2 recipient") {
 		t.Errorf("stdout =\n%s\nwant the recipient count", stdout)
 	}
@@ -187,12 +187,12 @@ func TestRotateGivesAccessToANewRecipient(t *testing.T) {
 	}
 }
 
-func TestRotateRevokesAccess(t *testing.T) {
+func TestResealRevokesAccess(t *testing.T) {
 	sealed(t)
 	second := newIdentity(t, "second")
 
-	if code, _, stderr := run(t, "rotate"); code != 0 {
-		t.Fatalf("rotate: exit = %d (stderr: %s)", code, stderr)
+	if code, _, stderr := run(t, "reseal"); code != 0 {
+		t.Fatalf("reseal: exit = %d (stderr: %s)", code, stderr)
 	}
 	if code, _, stderr := run(t, "remove", "second"); code != 0 {
 		t.Fatalf("remove: exit = %d (stderr: %s)", code, stderr)
@@ -200,14 +200,14 @@ func TestRotateRevokesAccess(t *testing.T) {
 
 	// Still readable until the file is re-encrypted: that is why rotate exists.
 	if code, _, _ := run(t, "--identity", second, "decrypt", "-o", "-"); code != 0 {
-		t.Errorf("before rotate: exit = %d, want the old file to still be readable", code)
+		t.Errorf("before reseal: exit = %d, want the old file to still be readable", code)
 	}
 
-	if code, _, stderr := run(t, "rotate"); code != 0 {
-		t.Fatalf("rotate: exit = %d (stderr: %s)", code, stderr)
+	if code, _, stderr := run(t, "reseal"); code != 0 {
+		t.Fatalf("reseal: exit = %d (stderr: %s)", code, stderr)
 	}
 	if code, _, _ := run(t, "--identity", second, "decrypt", "-o", "-"); code != 3 {
-		t.Errorf("after rotate: exit = %d, want 3", code)
+		t.Errorf("after reseal: exit = %d, want 3", code)
 	}
 
 	// The owner keeps access throughout.
@@ -216,14 +216,14 @@ func TestRotateRevokesAccess(t *testing.T) {
 	}
 }
 
-func TestRotateWarnsWhenLockingYourselfOut(t *testing.T) {
+func TestResealWarnsWhenLockingYourselfOut(t *testing.T) {
 	dir := sealed(t)
 
 	// Replace the recipient list with a key we do not hold.
 	writeEnv(t, dir, config.Filename,
 		"version: 1\nfile: .env.enc\nrecipients:\n  - name: someone\n    key: "+keyAlice+"\n")
 
-	code, stdout, stderr := run(t, "rotate")
+	code, stdout, stderr := run(t, "reseal")
 	if code != 0 {
 		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
 	}
@@ -232,13 +232,13 @@ func TestRotateWarnsWhenLockingYourselfOut(t *testing.T) {
 	}
 }
 
-func TestRotateWithoutEncryptedFile(t *testing.T) {
+func TestResealWithoutEncryptedFile(t *testing.T) {
 	dir := sealed(t)
 	if err := os.Remove(filepath.Join(dir, config.DefaultFile)); err != nil {
 		t.Fatal(err)
 	}
 
-	code, _, stderr := run(t, "rotate")
+	code, _, stderr := run(t, "reseal")
 	if code != 2 {
 		t.Errorf("exit = %d, want 2", code)
 	}
@@ -247,10 +247,10 @@ func TestRotateWithoutEncryptedFile(t *testing.T) {
 	}
 }
 
-func TestRotateOutsideAProject(t *testing.T) {
+func TestResealOutsideAProject(t *testing.T) {
 	project(t)
 
-	code, _, stderr := run(t, "rotate")
+	code, _, stderr := run(t, "reseal")
 	if code != 2 {
 		t.Errorf("exit = %d, want 2", code)
 	}
@@ -264,7 +264,7 @@ func newIdentityOnly(t *testing.T) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "identity")
-	if code, _, stderr := run(t, "--identity", path, "init"); code != 0 {
+	if code, _, stderr := run(t, "--identity", path, "keys", "generate"); code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}
 	return path
@@ -276,7 +276,7 @@ func newIdentity(t *testing.T, name string) string {
 	t.Helper()
 
 	path := filepath.Join(t.TempDir(), "identity")
-	code, stdout, stderr := run(t, "--identity", path, "init")
+	code, stdout, stderr := run(t, "--identity", path, "keys", "generate")
 	if code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}

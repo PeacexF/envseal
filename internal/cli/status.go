@@ -127,15 +127,15 @@ func (r *report) render(w io.Writer, unicode bool) {
 func (r *report) hints() []string {
 	switch {
 	case !r.IdentityAvailable:
-		return []string{"Run `envseal init` to create your identity."}
+		return []string{"Run `envseal keys generate` to create your identity."}
 	case !r.ConfigurationOK:
-		return []string{"Run `envseal encrypt .env` to set this project up."}
+		return []string{"Run `envseal init` to set this project up."}
 	case r.Recipients == 0:
 		return []string{"Run `envseal add <name> <public key>` to authorize someone."}
 	case !r.EncryptedFileOK:
 		return []string{"Run `envseal encrypt .env` to create the encrypted file."}
 	case !r.Decryptable:
-		return []string{"Your key is not a recipient of this file. Ask a current recipient to add it and run `envseal rotate`."}
+		return []string{"Your key is not a recipient of this file. Ask a current recipient to add it and run `envseal push`."}
 	}
 	return nil
 }

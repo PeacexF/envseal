@@ -22,10 +22,18 @@ type Entry struct {
 	Key   string
 	Value string
 	Line  int
+
+	// start and end bracket the value token in the source, so it can be
+	// replaced without disturbing anything around it. quote records how the
+	// value was written, so an edit can keep the author's style.
+	start, end int
+	quote      byte
 }
 
 type File struct {
 	raw     []byte
+	prefix  string // a byte order mark, if the source had one
+	body    string // the source with prefix removed; offsets index into this
 	entries []Entry
 }
 
@@ -44,7 +52,7 @@ func Load(path string) (*File, error) {
 // Parse reads dotenv content. source names the origin for error messages.
 func Parse(data []byte, source string) (*File, error) {
 	src := strings.TrimPrefix(string(data), "\ufeff")
-	f := &File{raw: data}
+	f := &File{raw: data, body: src, prefix: string(data[:len(data)-len(src)])}
 
 	fail := func(line int, format string, args ...any) error {
 		return errs.New(errs.CodeConfig, "invalid environment file %s", source).
@@ -76,39 +84,68 @@ func Parse(data []byte, source string) (*File, error) {
 			return nil, fail(line, "%s.", err)
 		}
 
-		value, next, consumed, err := parseValue(src, pos+eq+1, lineEnd)
+		v, err := parseValue(src, pos+eq+1, lineEnd)
 		if err != nil {
 			return nil, fail(line, "%s.", err)
 		}
-		if strings.ContainsRune(value, 0) {
+		if strings.ContainsRune(v.value, 0) {
 			return nil, fail(line, "the value of %s contains a NUL byte", key)
 		}
 
-		f.entries = append(f.entries, Entry{Key: key, Value: value, Line: line})
-		pos, line = next, line+1+consumed
+		f.entries = append(f.entries, Entry{
+			Key:   key,
+			Value: v.value,
+			Line:  line,
+			start: v.start,
+			end:   v.end,
+			quote: v.quote,
+		})
+		pos, line = v.next, line+1+v.consumed
 	}
 
 	return f, nil
 }
 
-// parseValue reads the value starting at i, which is just past the '='.
-// A quoted value may run past lineEnd; consumed reports the extra lines used.
-func parseValue(src string, i, lineEnd int) (value string, next, consumed int, err error) {
-	rest := strings.TrimSuffix(src[i:lineEnd], "\r")
-
-	quote := i + len(rest) - len(strings.TrimLeft(rest, " \t"))
-	if quote < lineEnd && (src[quote] == '"' || src[quote] == '\'') {
-		return parseQuoted(src, quote)
-	}
-
-	if c := inlineComment(rest); c >= 0 {
-		rest = rest[:c]
-	}
-	return strings.Trim(rest, " \t"), lineEnd + 1, 0, nil
+// value is a parsed value together with where it sits in the source.
+type value struct {
+	value      string
+	start, end int // the raw token, quotes included
+	next       int // start of the following line
+	consumed   int // extra lines a multiline value used
+	quote      byte
 }
 
-func parseQuoted(src string, open int) (value string, next, consumed int, err error) {
+// parseValue reads the value starting at i, which is just past the '='.
+// A quoted value may run past lineEnd; consumed reports the extra lines used.
+func parseValue(src string, i, lineEnd int) (value, error) {
+	rest := strings.TrimSuffix(src[i:lineEnd], "\r")
+	leading := len(rest) - len(strings.TrimLeft(rest, " \t"))
+
+	if open := i + leading; open < lineEnd && (src[open] == '"' || src[open] == '\'') {
+		return parseQuoted(src, open)
+	}
+
+	token := rest
+	if c := inlineComment(token); c >= 0 {
+		token = token[:c]
+	}
+	token = strings.TrimRight(token, " \t")
+
+	// A value of only whitespace leaves an empty token after the spaces.
+	if len(token) <= leading {
+		return value{start: i + leading, end: i + leading, next: lineEnd + 1}, nil
+	}
+	return value{
+		value: token[leading:],
+		start: i + leading,
+		end:   i + len(token),
+		next:  lineEnd + 1,
+	}, nil
+}
+
+func parseQuoted(src string, open int) (value, error) {
 	quote := src[open]
+	v := value{start: open, quote: quote}
 
 	var b strings.Builder
 	for j := open + 1; j < len(src); j++ {
@@ -116,26 +153,27 @@ func parseQuoted(src string, open int) (value string, next, consumed int, err er
 		case c == quote:
 			tail, err := trailing(src, j+1)
 			if err != nil {
-				return "", 0, 0, err
+				return value{}, err
 			}
-			return b.String(), tail, consumed, nil
+			v.value, v.end, v.next = b.String(), j+1, tail
+			return v, nil
 
 		case c == '\\' && quote == '"' && j+1 < len(src):
 			j++
 			b.WriteString(unescape(src[j]))
 			if src[j] == '\n' {
-				consumed++
+				v.consumed++
 			}
 
 		default:
 			if c == '\n' {
-				consumed++
+				v.consumed++
 			}
 			b.WriteByte(c)
 		}
 	}
 
-	return "", 0, 0, errors.New("unterminated quoted value")
+	return value{}, errors.New("unterminated quoted value")
 }
 
 // trailing verifies that only whitespace or a comment follows a quoted value,

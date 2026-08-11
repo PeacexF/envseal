@@ -49,7 +49,7 @@ Stated plainly, because a security tool that oversells itself is worse than none
 
 This is the most commonly misunderstood property of every tool in this category:
 
-> `envseal remove` plus `envseal rotate` controls **future** encryptions. It
+> `envseal remove` plus `envseal reseal` controls **future** encryptions. It
 > does not retract a copy someone already has. Their key still opens the old
 > `.env.enc`, and Git history keeps that file forever.
 >

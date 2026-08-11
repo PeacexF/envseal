@@ -147,7 +147,7 @@ func TestRunWrongIdentity(t *testing.T) {
 	sealed(t)
 
 	other := filepath.Join(t.TempDir(), "identity")
-	if code, _, stderr := run(t, "--identity", other, "init"); code != 0 {
+	if code, _, stderr := run(t, "--identity", other, "keys", "generate"); code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}
 

@@ -78,9 +78,16 @@ failures never echo their input.
 ### `dotenv`
 
 Order-preserving parser. `File` keeps the **original bytes** and `Bytes()`
-returns them unchanged, so encryption reproduces the source exactly — there is
-no renderer, and therefore no class of reformatting bugs. Parsing exists to
-serve `run` and `status`, and to validate before encrypting.
+returns them unchanged, so encryption reproduces the source exactly.
+
+`Set` is the one editing operation. Each entry records the byte span of its
+value, so changing a variable rewrites only those bytes: comments, ordering,
+spacing, and other variables' quoting are untouched by construction rather than
+by a renderer that tries to reproduce them. `render` picks the quoting a value
+needs, keeping the author's style when it still works.
+
+`Compare` produces a `Delta` of added, changed, and removed **names**, shared by
+`diff` and `pull`.
 
 ### `crypto`
 

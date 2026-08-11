@@ -110,7 +110,8 @@ export ENVSEAL_IDENTITY="AGE-SECRET-KEY-1QQQQ..."                # key material
 The second form exists for CI, where secrets arrive as environment variables and
 writing a temporary file would be an unnecessary risk. See [ci.md](ci.md).
 
-Running `envseal init` while `ENVSEAL_IDENTITY` holds key material is refused:
+Running `envseal keys generate` while `ENVSEAL_IDENTITY` holds key material is
+refused:
 the file would be created and then ignored, because the variable takes
 precedence.
 
@@ -138,7 +139,8 @@ silences requested output: `decrypt -o -` and `status --json` still write.
 |---|---|---|
 | `~/.envseal/` | `0700` | Identity directory |
 | `~/.envseal/identity` | `0600` | Your private key |
-| `~/.envseal/identity.<timestamp>.bak` | `0600` | Previous key, kept by `init --force` |
+| `~/.envseal/identity.<timestamp>.bak` | `0600` | Previous key, kept by `keys generate --force` |
+| `~/.envseal/sync/*` | `0600` | Fingerprints of the last written plaintext |
 | `.envseal.yaml` | `0644` | Project configuration, committed |
 | `.env.enc` | `0644` | Encrypted environment, committed |
 | `.env` (from `decrypt`) | `0600` | Plaintext, never committed |

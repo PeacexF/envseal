@@ -80,7 +80,7 @@ func decryptError(err error, source string) error {
 		return errs.New(errs.CodeCrypto, "unable to decrypt %s", source).
 			Detailf("The file was not encrypted for the identity you are using.").
 			Check("confirm your public key is listed in .envseal.yaml",
-				"ask a current recipient to run `envseal add <name> <your key>` and `envseal rotate`",
+				"ask a current recipient to run `envseal add <name> <your key>` and `envseal push`",
 				"check --identity and ENVSEAL_IDENTITY point at the right identity")
 	}
 

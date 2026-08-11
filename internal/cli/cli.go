@@ -119,6 +119,7 @@ func newRoot(a *app) *cobra.Command {
 
 	root.AddCommand(
 		newInitCmd(a),
+		newKeysCmd(a),
 		newEncryptCmd(a),
 		newDecryptCmd(a),
 		newPushCmd(a),
@@ -126,6 +127,7 @@ func newRoot(a *app) *cobra.Command {
 		newRunCmd(a),
 		newAddCmd(a),
 		newRemoveCmd(a),
+		newResealCmd(a),
 		newRotateCmd(a),
 		newStatusCmd(a),
 		newDiffCmd(a),

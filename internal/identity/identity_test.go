@@ -188,8 +188,8 @@ func TestLoadMissing(t *testing.T) {
 	if got := errs.CodeOf(err); got != errs.CodeIdentity {
 		t.Errorf("CodeOf() = %d, want %d", got, errs.CodeIdentity)
 	}
-	if !strings.Contains(rendered(err), "envseal init") {
-		t.Errorf("error =\n%s\nwant it to suggest `envseal init`", rendered(err))
+	if !strings.Contains(rendered(err), "envseal keys generate") {
+		t.Errorf("error =\n%s\nwant it to suggest generating an identity", rendered(err))
 	}
 }
 

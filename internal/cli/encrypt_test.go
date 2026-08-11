@@ -21,7 +21,7 @@ func project(t *testing.T) string {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	if code, _, stderr := run(t, "init"); code != 0 {
+	if code, _, stderr := run(t, "keys", "generate"); code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}
 	return dir

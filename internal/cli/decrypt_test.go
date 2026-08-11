@@ -141,7 +141,7 @@ func TestDecryptWrongIdentity(t *testing.T) {
 
 	// A second identity that was never added as a recipient.
 	other := filepath.Join(t.TempDir(), "identity")
-	if code, _, stderr := run(t, "--identity", other, "init"); code != 0 {
+	if code, _, stderr := run(t, "--identity", other, "keys", "generate"); code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}
 
@@ -194,8 +194,8 @@ func TestDecryptWithoutIdentity(t *testing.T) {
 	if code != 4 {
 		t.Errorf("exit = %d, want 4", code)
 	}
-	if !strings.Contains(stderr, "envseal init") {
-		t.Errorf("stderr =\n%s\nwant it to suggest `envseal init`", stderr)
+	if !strings.Contains(stderr, "envseal keys generate") {
+		t.Errorf("stderr =\n%s\nwant it to suggest generating an identity", stderr)
 	}
 }
 

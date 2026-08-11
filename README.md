@@ -7,7 +7,8 @@ Envseal encrypts `.env` files so they can live in Git, using
 network access — a single binary and a private key in your home directory.
 
 ```bash
-envseal init                    # once per machine
+envseal keys generate           # once per machine
+envseal init                    # set up this project
 envseal encrypt .env            # → .env.enc, safe to commit
 envseal run -- ./server         # decrypted in memory, never on disk
 ```
@@ -68,24 +69,26 @@ Binary releases and a Homebrew formula are planned.
 ## Quickstart
 
 ```bash
-$ envseal init
+$ envseal keys generate
 Identity created.
 
 Public identity:
   age1ql3z7hjy54pw3hyww5ayyfg7zqgvc7w3j2elw8zmrj2kg5sfn9aqmcac8p
 
-$ envseal encrypt .env
-Created .envseal.yaml with your identity as the only recipient.
+$ envseal init
+Created .envseal.yaml with your key as the only recipient
+Created .env.example from .env (3 variables, no values)
+Created .gitignore (+4 rules)
 
+$ envseal encrypt .env
 Encrypted .env → .env.enc
 Recipients: you
-
-Commit .env.enc and .envseal.yaml. Keep .env out of Git.
 
 $ envseal run -- ./server
 ```
 
-Add to `.gitignore`:
+`init` writes the `.gitignore` rules for you. The last one matters: without
+`!*.enc`, the `.env.*` rule silently ignores `.env.enc` itself.
 
 ```gitignore
 .env
@@ -116,7 +119,8 @@ Decrypted .env.enc → .env
 ~ DATABASE_URL
 ```
 
-To add someone: Alice runs `envseal init` and sends you her **public** key.
+To add someone: Alice runs `envseal keys generate`, then `envseal keys public`
+and sends you the key it prints.
 
 ```bash
 envseal add alice age1lggyhqrw2nlhcxprm67z43rta597azn8gknawjehu9d9dl0jq3yqqvfafg
@@ -130,6 +134,23 @@ re-encrypts for the new list. Alice pulls and is productive immediately:
 envseal pull
 envseal run -- ./server
 ```
+
+## Changing one secret
+
+```bash
+$ envseal rotate STRIPE_SECRET_KEY
+New value for STRIPE_SECRET_KEY:
+Read 32 characters.
+Rotated STRIPE_SECRET_KEY in .env.enc for 3 recipients.
+```
+
+The value is typed without echo, decrypted and re-encrypted **in memory**, and
+every other line of the file survives byte for byte — comments, ordering, and
+the quoting of other variables. `--generate` invents a strong value; `--stdin`
+pipes one in.
+
+There is deliberately no `--value` flag: a secret on the command line lands in
+your shell history and is visible to anyone who can run `ps`.
 
 ## Reviewing and validating
 
@@ -178,7 +199,9 @@ temporary files. Use a dedicated CI identity, never a personal one. See
 
 | Command | Purpose |
 |---|---|
-| `envseal init` | Create your identity in `~/.envseal/identity` |
+| `envseal keys generate` | Create your identity in `~/.envseal/identity` |
+| `envseal keys public` | Print your public key, for sharing |
+| `envseal init` | Set up this project: config, example, ignore rules |
 | `envseal push` | Encrypt, commit, and push the environment |
 | `envseal pull` | Fetch and decrypt the shared environment |
 | `envseal encrypt [file]` | Encrypt `.env` for the project's recipients |
@@ -186,7 +209,8 @@ temporary files. Use a dedicated CI identity, never a personal one. See
 | `envseal run [file] -- cmd` | Run a command with the decrypted environment |
 | `envseal add <name> <key>` | Authorize a public key |
 | `envseal remove <name>` | Withdraw a recipient |
-| `envseal rotate` | Re-encrypt for the current recipient list |
+| `envseal rotate <VAR>` | Replace one variable's value, in memory |
+| `envseal reseal` | Re-encrypt for the current recipient list |
 | `envseal diff` | Show which variables changed, by name only |
 | `envseal check` | Validate the project, detect exposed plaintext |
 | `envseal status` | Show project state, `--json` for scripts |

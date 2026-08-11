@@ -106,7 +106,7 @@ func resolveRecipients(a *app, ws *workspace, flags []string) (chosen []config.R
 			if err := config.ValidateKey(key); err != nil {
 				return nil, false, errs.New(errs.CodeConfig, "invalid --recipient").
 					Detailf("%s.", err).
-					Check("public keys look like age1... and are printed by `envseal init`")
+					Check("public keys look like age1... and are printed by `envseal keys public`")
 			}
 			chosen = append(chosen, config.Recipient{Name: key, Key: key})
 		}

@@ -19,7 +19,7 @@ func teammate(t *testing.T, remote string) (otherDir, identityPath string) {
 	mustGit(t, otherDir, "config", "user.name", "Other")
 
 	identityPath = filepath.Join(t.TempDir(), "identity")
-	code, stdout, stderr := run(t, "--identity", identityPath, "init")
+	code, stdout, stderr := run(t, "--identity", identityPath, "keys", "generate")
 	if code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}
@@ -201,7 +201,7 @@ func TestPullWrongIdentity(t *testing.T) {
 	sealed(t)
 
 	other := filepath.Join(t.TempDir(), "identity")
-	if code, _, stderr := run(t, "--identity", other, "init"); code != 0 {
+	if code, _, stderr := run(t, "--identity", other, "keys", "generate"); code != 0 {
 		t.Fatalf("init: exit = %d (stderr: %s)", code, stderr)
 	}
 
