@@ -36,3 +36,9 @@ dist-ssr
 *.sln
 *.sw?
 notes/
+
+/bin/
+coverage.out
+.env
+.env.*
+!.env.example
