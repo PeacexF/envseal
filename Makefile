@@ -9,32 +9,36 @@ LDFLAGS := -s -w -X $(PKG)/internal/version.Version=$(VERSION)
 help:
 	@echo 'envseal — make targets'
 	@echo
-	@grep -hE '^[a-z-]+:.*##' $(MAKEFILE_LIST) | \
-		awk -F':.*##' '{ printf "  \033[1m%-9s\033[0m %s\n", $$1, $$2 }'
+	@awk -F: '/^# /{ d = substr($$0, 3); next } \
+		/^[a-z][a-z-]*:/ { if (d != "") printf "  \033[1m%-9s\033[0m %s\n", $$1, d; d = "" } \
+		/^$$/ { d = "" }' $(MAKEFILE_LIST)
 	@echo
 	@echo 'Version: $(VERSION)  (override with `make build VERSION=v1.0.0`)'
 
-# bin/envseal with version info
+# Build bin/envseal with version info baked in
 build:
 	go build -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY) ./cmd/envseal
 
-# tests
+# Run all tests
 test:
 	go test ./...
 
-# coverage
-cover: 
+# Run tests and report total coverage
+cover:
 	go test -coverprofile=coverage.out ./...
 	go tool cover -func=coverage.out | tail -1
 
+# Run go vet
 vet:
 	go vet ./...
 
-fmt: 
+# Format all Go source in place
+fmt:
 	gofmt -l -w .
 
-# ci
-check: vet test 
+# Run what CI runs
+check: vet test
+	@test -z "$$(gofmt -l .)" || { echo 'not gofmt'"'"'d:'; gofmt -l .; exit 1; }
 
 # Install envseal into $(GOPATH)/bin
 install:
