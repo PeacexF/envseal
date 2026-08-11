@@ -110,7 +110,8 @@ release:
 
     ```bash
     envseal keys generate   # once per machine
-    envseal init            # Publishing to a tap needs a repository and a token. Without them the release
+    envseal init            # set up a project
+    ```
 
 homebrew_casks:
   - name: envseal
@@ -120,7 +121,7 @@ homebrew_casks:
     repository:
       owner: PeacexF
       name: homebrew-tap
-      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     directory: Casks
     homepage: https://github.com/PeacexF/envseal
     description: Git-friendly encrypted .env files

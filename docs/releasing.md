@@ -122,6 +122,25 @@ and still fail at release time — the tap-token check did exactly that.
 - [ ] `goreleaser release --snapshot --clean --skip=publish` succeeds
 - [ ] Tag and push
 
+## Troubleshooting
+
+**`homebrew cask: expected {{ .Env.VAR_NAME }} only (no plain-text or other
+interpolation)`**
+
+The `token` field accepts *only* the exact form `{{ .Env.NAME }}`. Anything
+else — a function call, a default, surrounding text — is rejected when the cask
+is published. `skip_upload` has no such rule, which is why it can use the
+tolerant `{{ if index .Env "..." }}` form to keep local snapshots working while
+`token` stays strict.
+
+This is not caught by `goreleaser check` or by a snapshot, because publishing is
+skipped in both. Only a real tag exercises it.
+
+**The release published but a later step failed.** GoReleaser has no way to skip
+only the GitHub release and re-run a later publisher (`--skip` takes whole
+steps: `homebrew`, `publish`, `announce`, …). Fix the config and tag a new patch
+version; do not re-tag the published one.
+
 ## If a release goes wrong
 
 Delete the GitHub release and the tag, fix, and tag again:
