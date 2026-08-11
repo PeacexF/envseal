@@ -6,14 +6,31 @@ import (
 	"strings"
 )
 
-// display shortens a path for output, abbreviating the home directory to "~".
+// display shortens a path for output: relative to the working directory when it
+// lives there, otherwise abbreviating the home directory to "~".
 func display(path string) string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
+	if !filepath.IsAbs(path) {
 		return path
 	}
-	if rel, err := filepath.Rel(home, path); err == nil && !strings.HasPrefix(rel, "..") {
-		return filepath.ToSlash(filepath.Join("~", rel))
+
+	if wd, err := os.Getwd(); err == nil {
+		if rel, ok := within(wd, path); ok {
+			return rel
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if rel, ok := within(home, path); ok {
+			return "~/" + rel
+		}
 	}
 	return path
+}
+
+// within reports path relative to base, when it is inside base.
+func within(base, path string) (string, bool) {
+	rel, err := filepath.Rel(base, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
 }

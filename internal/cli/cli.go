@@ -68,7 +68,11 @@ func NewRoot() *cobra.Command {
 	root.PersistentFlags().StringVar(&a.identityPath, "identity", "",
 		"path to your private identity (default ~/.envseal/identity)")
 
-	root.AddCommand(newInitCmd(a))
+	root.AddCommand(
+		newInitCmd(a),
+		newEncryptCmd(a),
+		newDecryptCmd(a),
+	)
 
 	return root
 }

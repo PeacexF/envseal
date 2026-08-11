@@ -91,7 +91,7 @@ func (c *Config) validate(source string) error {
 	if c.File == "" {
 		c.File = DefaultFile
 	}
-	if filepath.IsAbs(c.File) || strings.Contains(filepath.ToSlash(c.File), "../") {
+	if escapesProject(c.File) {
 		return fail("`file` must be a path inside the project, but is %q.", c.File)
 	}
 
@@ -123,6 +123,33 @@ func (c *Config) validate(source string) error {
 	return nil
 }
 
+// escapesProject reports whether a configured path could reach outside the
+// project. The rules are deliberately platform-independent: a repository is
+// shared between operating systems, so a path that is absolute on Windows must
+// be rejected on Linux too, and the other way round.
+func escapesProject(path string) bool {
+	if path == "" {
+		return false
+	}
+
+	// Backslashes count as separators even on Unix, so a UNC path or a Windows
+	// traversal is rejected wherever the file is read.
+	slashed := strings.ReplaceAll(filepath.ToSlash(path), `\`, "/")
+	switch {
+	case filepath.IsAbs(path), strings.HasPrefix(slashed, "/"):
+		return true
+	case len(path) >= 2 && path[1] == ':': // C:\... even when parsed on Unix
+		return true
+	}
+
+	for part := range strings.SplitSeq(slashed, "/") {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
+}
+
 // ValidateKey reports whether key is a public age recipient.
 func ValidateKey(key string) error {
 	if !strings.HasPrefix(key, "age1") {
@@ -135,6 +162,20 @@ func ValidateKey(key string) error {
 		return errors.New("not a valid age public key")
 	}
 	return nil
+}
+
+// ParseRecipients converts configured recipients into age recipients.
+func ParseRecipients(recipients []Recipient) ([]age.Recipient, error) {
+	parsed := make([]age.Recipient, 0, len(recipients))
+	for _, r := range recipients {
+		key, err := age.ParseX25519Recipient(r.Key)
+		if err != nil {
+			return nil, errs.New(errs.CodeConfig, "recipient %q has an invalid key", r.Name).
+				Check("remove it with `envseal remove " + r.Name + "` and add it again")
+		}
+		parsed = append(parsed, key)
+	}
+	return parsed, nil
 }
 
 // Find returns the index of the recipient matching name or key, or -1.
