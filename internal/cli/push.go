@@ -101,7 +101,7 @@ func newPushCmd(a *app) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := safefile.Write(target, ciphertext, encryptedFileMode); err != nil {
+				if err := safefile.Write(target, ciphertext, publicFileMode); err != nil {
 					return errs.New(errs.CodeGeneral, "unable to write %s", display(target)).Wrap(err)
 				}
 				fmt.Fprintf(out, "Encrypted %s → %s\n", source, display(target))

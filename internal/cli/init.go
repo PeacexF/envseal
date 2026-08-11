@@ -119,7 +119,7 @@ func writeExample(out io.Writer, ws *workspace) error {
 		b.WriteString("=\n")
 	}
 
-	if err := safefile.Write(path, []byte(b.String()), encryptedFileMode); err != nil {
+	if err := safefile.Write(path, []byte(b.String()), publicFileMode); err != nil {
 		return errs.New(errs.CodeGeneral, "unable to write %s", display(path)).Wrap(err)
 	}
 	fmt.Fprintf(out, "Created %s from %s (%s, no values)\n",
@@ -165,7 +165,7 @@ func writeIgnoreRules(out io.Writer, ws *workspace) error {
 	b.WriteString(strings.Join(missing, "\n"))
 	b.WriteString("\n")
 
-	if err := safefile.Write(path, []byte(b.String()), encryptedFileMode); err != nil {
+	if err := safefile.Write(path, []byte(b.String()), publicFileMode); err != nil {
 		return errs.New(errs.CodeGeneral, "unable to write %s", display(path)).Wrap(err)
 	}
 

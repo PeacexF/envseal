@@ -118,6 +118,23 @@ leave residue, and that residue is owner-only. The alternative — non-atomic
 writes — trades this narrow window for corrupted files on any interruption,
 which is worse.
 
+### Editing a sealed value
+
+`envseal rotate` decrypts in memory, replaces one value, and encrypts again;
+plaintext never reaches the disk. Two properties make that safe to rely on:
+
+- The value is never accepted as a command-line argument. There is no `--value`
+  flag, because arguments are written to shell history and are visible in `ps`
+  to every user on the machine. It is typed without echo, piped via `--stdin`,
+  or generated.
+- A value containing a NUL byte is refused. The operating system marks the end
+  of an environment value with one, so writing it would produce a sealed file
+  that nothing could read back.
+
+If a local `.env` exists and still matches the sealed environment, it is updated
+too. That writes plaintext, but the alternative is worse: a stale `.env` would be
+re-encrypted by the next `push`, silently undoing the rotation.
+
 ### Sync fingerprints
 
 `envseal pull` records a SHA-256 of each plaintext file it writes, under
@@ -152,10 +169,24 @@ The complete list:
 | `github.com/spf13/cobra` | Command-line parsing and completion |
 | `golang.org/x/term` | Detecting whether output is a terminal |
 
-`envseal push` and `envseal pull` additionally invoke the **`git` binary** you
-already have. Shelling out rather than embedding a Git library means your
-credentials, SSH agent, signing keys, and hooks keep working, and envseal never
-handles them. No other command needs git.
+`envseal push`, `pull`, `diff --ref`, and `check` additionally invoke the
+**`git` binary** you already have. Shelling out rather than embedding a Git
+library means your credentials, SSH agent, signing keys, and hooks keep working,
+and envseal never handles them.
+
+Two consequences worth stating:
+
+- Envseal runs the `git` it finds on your `PATH`. A malicious binary earlier in
+  `PATH` would be run, exactly as it would be if you typed `git` yourself.
+- `git commit` and `git push` run the repository's own hooks. Cloning a
+  repository and running any git command already does this; envseal does not
+  change it, and does not disable hooks.
+
+Arguments are passed as separate values, never through a shell, so there is no
+shell injection. Paths are additionally guarded with a `--` separator so a
+filename can never be read as an option. A **revision** cannot be guarded that
+way — `git show <rev>:<path>` joins the two into one argument — so revisions
+beginning with a dash are rejected outright.
 
 A small dependency surface is a security property. CI runs `govulncheck` on
 every push.
@@ -171,8 +202,11 @@ Security-relevant behaviour is covered by tests rather than by intent:
   only the files it manages, and its pushed output is verified to be armored
   ciphertext containing no secret;
 - corrupted, truncated, and foreign-recipient files fail with exit 3;
-- the `.env` parser is fuzzed — millions of executions, checking that names
-  stay usable and that the source bytes are never altered.
+- the `.env` parser is fuzzed — tens of millions of executions, checking that
+  names stay usable and that the source bytes are never altered;
+- the `.env` **editor** is fuzzed the way `rotate` drives it: whatever the file
+  looks like, replacing one value stores exactly that value, leaves every other
+  variable untouched, and produces a file that still parses.
 
 ## Verifying envseal's work yourself
 

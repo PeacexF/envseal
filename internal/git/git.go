@@ -165,6 +165,10 @@ func (r *Repo) Fetch(stdout, stderr io.Writer) error {
 // Show reads a file's contents at a revision, without checking anything out.
 // path must be relative to the repository root.
 func (r *Repo) Show(ref, path string) ([]byte, error) {
+	if err := checkRevision(ref); err != nil {
+		return nil, err
+	}
+
 	cmd := exec.Command("git", "show", ref+":"+path)
 	cmd.Dir = r.Root
 
@@ -224,6 +228,9 @@ func (r *Repo) Tracked() ([]string, error) {
 
 // Unpushed lists the commits on the current branch that the upstream lacks.
 func (r *Repo) Unpushed(upstream string, paths ...string) ([]string, error) {
+	if err := checkRevision(upstream); err != nil {
+		return nil, err
+	}
 	args := append([]string{"log", "--oneline", "--no-decorate", upstream + "..HEAD", "--"}, paths...)
 	out, err := run(r.Root, args...)
 	if err != nil {
@@ -233,6 +240,21 @@ func (r *Repo) Unpushed(upstream string, paths ...string) ([]string, error) {
 		return nil, nil
 	}
 	return strings.Split(out, "\n"), nil
+}
+
+// checkRevision refuses a revision that git would read as an option.
+//
+// A revision is joined to a path in one argument, so it cannot be protected by
+// a "--" separator the way a path can. Left unchecked, a name beginning with a
+// dash reaches git as a flag: `--output=<file>` alone is enough to make git
+// write wherever it is pointed.
+func checkRevision(ref string) error {
+	if ref == "" || strings.HasPrefix(ref, "-") {
+		return errs.New(errs.CodeGit, "%q is not a usable revision", ref).
+			Detailf("A revision cannot start with a dash: git would read it as an option.").
+			Check("use a branch, tag, or commit, such as `origin/main` or `HEAD`")
+	}
+	return nil
 }
 
 func run(dir string, args ...string) (string, error) {

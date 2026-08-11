@@ -2,6 +2,8 @@ package cli_test
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -182,5 +184,31 @@ func TestDiffWrongIdentity(t *testing.T) {
 	other := newIdentityOnly(t)
 	if code, _, _ := run(t, "--identity", other, "diff"); code != 3 {
 		t.Errorf("exit = %d, want 3", code)
+	}
+}
+
+// A revision is joined to a path in one argument, so it cannot be guarded by a
+// "--" separator. An option-shaped revision would otherwise reach git as a
+// flag: `--output=<file>` alone makes git write wherever it is pointed.
+func TestDiffRefusesOptionShapedRevisions(t *testing.T) {
+	dir, _ := gitRepo(t)
+	if code, _, stderr := run(t, "push", "--yes"); code != 0 {
+		t.Fatalf("push: exit = %d (stderr: %s)", code, stderr)
+	}
+
+	written := filepath.Join(dir, "should-not-exist")
+	code, _, stderr := run(t, "diff", "--ref", "--output="+written)
+	if code != 6 {
+		t.Errorf("exit = %d, want 6", code)
+	}
+	if !strings.Contains(stderr, "not a usable revision") {
+		t.Errorf("stderr =\n%s\nwant it to reject the revision", stderr)
+	}
+
+	if _, err := os.Stat(written); err == nil {
+		t.Error("git was made to write a file")
+	}
+	if matches, _ := filepath.Glob(written + "*"); len(matches) > 0 {
+		t.Errorf("git wrote %v", matches)
 	}
 }

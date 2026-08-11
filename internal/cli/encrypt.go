@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	encryptedFileMode = 0o644 // meant to be committed
+	publicFileMode = 0o644 // meant to be committed: ciphertext, config, examples
 
 	encryptLong = `Encrypt an environment file for the project's recipients.
 
@@ -74,7 +74,7 @@ func newEncryptCmd(a *app) *cobra.Command {
 			if target == "" {
 				target = ws.encryptedPath()
 			}
-			if err := safefile.Write(target, ciphertext, encryptedFileMode); err != nil {
+			if err := safefile.Write(target, ciphertext, publicFileMode); err != nil {
 				return errs.New(errs.CodeGeneral, "unable to write %s", target).Wrap(err)
 			}
 

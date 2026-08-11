@@ -179,7 +179,7 @@ func newResealCmd(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := safefile.Write(source, rotated, encryptedFileMode); err != nil {
+			if err := safefile.Write(source, rotated, publicFileMode); err != nil {
 				return errs.New(errs.CodeGeneral, "unable to write %s", display(source)).Wrap(err)
 			}
 

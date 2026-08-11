@@ -71,6 +71,7 @@ func newDecryptCmd(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			defer clear(plaintext)
 
 			if output == "-" {
 				return a.writeToStdout(cmd, plaintext, force)

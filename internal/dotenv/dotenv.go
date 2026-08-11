@@ -31,7 +31,6 @@ type Entry struct {
 }
 
 type File struct {
-	raw     []byte
 	prefix  string // a byte order mark, if the source had one
 	body    string // the source with prefix removed; offsets index into this
 	entries []Entry
@@ -52,7 +51,7 @@ func Load(path string) (*File, error) {
 // Parse reads dotenv content. source names the origin for error messages.
 func Parse(data []byte, source string) (*File, error) {
 	src := strings.TrimPrefix(string(data), "\ufeff")
-	f := &File{raw: data, body: src, prefix: string(data[:len(data)-len(src)])}
+	f := &File{body: src, prefix: string(data[:len(data)-len(src)])}
 
 	fail := func(line int, format string, args ...any) error {
 		return errs.New(errs.CodeConfig, "invalid environment file %s", source).
@@ -235,7 +234,11 @@ func validateKey(key string) error {
 }
 
 // Bytes returns the original file content, unmodified.
-func (f *File) Bytes() []byte { return f.raw }
+//
+// It is rebuilt from strings rather than handed back as the caller's slice:
+// callers decrypt into a buffer and zero it afterwards, and a File that aliased
+// that buffer would quietly turn into zeros.
+func (f *File) Bytes() []byte { return []byte(f.prefix + f.body) }
 
 // Entries returns the assignments in source order, including duplicate keys.
 func (f *File) Entries() []Entry { return f.entries }

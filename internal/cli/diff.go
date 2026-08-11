@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -113,6 +114,11 @@ func (a *app) diffSides(ws *workspace, sealed, ref string, id *identity.Identity
 	}
 	blob, err := repo.Show(ref, path)
 	if err != nil {
+		// A rejected revision explains itself; only git's own failure needs
+		// translating into something actionable.
+		if typed, ok := errors.AsType[*errs.Error](err); ok {
+			return nil, nil, typed
+		}
 		return nil, nil, errs.New(errs.CodeGit, "%s does not exist at %s", path, ref).
 			Check("check the revision name", "run `git fetch` if it is a remote branch")
 	}

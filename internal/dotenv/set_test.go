@@ -220,3 +220,66 @@ func shortName(s string) string {
 	}
 	return name
 }
+
+// Callers decrypt into a buffer and zero it as soon as they are done. A File
+// that aliased that buffer would quietly become zeros.
+func TestParseDoesNotAliasTheCallersBuffer(t *testing.T) {
+	const source = "API_KEY=secret\nOTHER=keep\n"
+
+	plaintext := []byte(source)
+	f, err := dotenv.Parse(plaintext, ".env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	clear(plaintext)
+
+	if got := string(f.Bytes()); got != source {
+		t.Errorf("Bytes() = %q, want %q", got, source)
+	}
+	if got, _ := f.Get("API_KEY"); got != "secret" {
+		t.Errorf("Get() = %q, want %q", got, "secret")
+	}
+
+	updated, err := f.Set("API_KEY", "new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := string(updated), "API_KEY=new\nOTHER=keep\n"; got != want {
+		t.Errorf("Set() = %q, want %q", got, want)
+	}
+}
+
+// Found by fuzzing: a NUL cannot round-trip, so writing one would seal a file
+// that nothing could read again.
+func TestSetRejectsNUL(t *testing.T) {
+	if _, err := parse(t, "A=1\n").Set("A", "bad\x00value"); err == nil {
+		t.Error("Set() = nil, want an error for a NUL byte")
+	}
+}
+
+// Found by fuzzing: an empty value shares its separating space with a trailing
+// comment, so a naive replacement glued the value to the '#' and ate the note.
+func TestSetKeepsACommentAfterAnEmptyValue(t *testing.T) {
+	tests := []struct{ src, value, want string }{
+		{"TARGET= #note\n", "0", "TARGET= 0 #note\n"},
+		{"TARGET= # spaced note\n", "value", "TARGET= value # spaced note\n"},
+		// No space before the '#', so "#tag" is the value, not a comment.
+		{"TARGET=#tag\n", "0", "TARGET=0\n"},
+		{"TARGET= #note\n", "", "TARGET= #note\n"},
+	}
+
+	for _, tt := range tests {
+		got := set(t, tt.src, "TARGET", tt.value)
+		if got != tt.want {
+			t.Errorf("Set(%q, %q) = %q, want %q", tt.src, tt.value, got, tt.want)
+		}
+
+		reparsed, err := dotenv.Parse([]byte(got), ".env")
+		if err != nil {
+			t.Fatalf("Parse(%q) = %v", got, err)
+		}
+		if v, _ := reparsed.Get("TARGET"); v != tt.value {
+			t.Errorf("round trip of %q = %q, want %q", got, v, tt.value)
+		}
+	}
+}

@@ -20,6 +20,14 @@ func (f *File) Set(key, value string) ([]byte, error) {
 			Detailf("%s.", err)
 	}
 
+	// A NUL cannot survive: the operating system marks the end of an
+	// environment value with one, and the parser rejects it on the way back in.
+	// Writing it would produce a sealed file nothing could read again.
+	if strings.ContainsRune(value, 0) {
+		return nil, errs.New(errs.CodeConfig, "the value for %s contains a NUL byte", key).
+			Detailf("Environment variables cannot hold one: it marks the end of a value.")
+	}
+
 	target := -1
 	for i, e := range f.entries {
 		if e.Key == key {
@@ -36,7 +44,17 @@ func (f *File) Set(key, value string) ([]byte, error) {
 	}
 
 	e := f.entries[target]
-	return []byte(f.prefix + f.body[:e.start] + render(value, e.quote) + f.body[e.end:]), nil
+	rendered := render(value, e.quote)
+	tail := f.body[e.end:]
+
+	// An empty value shares its separating space with a following comment, so
+	// `KEY= # note` has nothing between the two. Writing a value straight in
+	// would glue it to the '#' and swallow the comment into the value.
+	if rendered != "" && strings.HasPrefix(tail, "#") {
+		rendered += " "
+	}
+
+	return []byte(f.prefix + f.body[:e.start] + rendered + tail), nil
 }
 
 // Has reports whether the file assigns key.

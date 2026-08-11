@@ -116,7 +116,7 @@ func newRotateCmd(a *app) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := safefile.Write(sealed, resealed, encryptedFileMode); err != nil {
+			if err := safefile.Write(sealed, resealed, publicFileMode); err != nil {
 				return errs.New(errs.CodeGeneral, "unable to write %s", display(sealed)).Wrap(err)
 			}
 
@@ -186,6 +186,7 @@ func (a *app) promptValue(cmd *cobra.Command, key string) (string, error) {
 	fmt.Fprintf(out, "New value for %s: ", key)
 
 	typed, err := term.ReadPassword(int(in.Fd()))
+	defer clear(typed)
 	fmt.Fprintln(out)
 	if err != nil {
 		return "", errs.New(errs.CodeGeneral, "unable to read the value").Wrap(err)
