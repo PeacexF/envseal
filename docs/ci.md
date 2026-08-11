@@ -43,7 +43,32 @@ harmless.
 
 ## GitHub Actions
 
-Store the contents of `ci-identity` as a repository secret named
+The quickest route is the action, which installs a checksum-verified binary and
+validates the project:
+
+```yaml
+- uses: PeacexF/envseal/action@v1.0.1
+  env:
+    ENVSEAL_IDENTITY: ${{ secrets.ENVSEAL_IDENTITY }}
+```
+
+It annotates failures on the pull request and writes a job summary. Without the
+secret it still runs, and still catches a committed plaintext `.env` — which is
+what makes it useful on fork pull requests. See [the action's README](../action/README.md).
+
+To run your own commands, install only:
+
+```yaml
+- uses: PeacexF/envseal/action@v1.0.1
+  with:
+    check: false
+- env:
+    ENVSEAL_IDENTITY: ${{ secrets.ENVSEAL_IDENTITY }}
+  run: envseal run -- go test ./...
+```
+
+The rest of this section sets it up by hand, which is what the action does
+internally. Store the contents of `ci-identity` as a repository secret named
 `ENVSEAL_IDENTITY`.
 
 ```yaml

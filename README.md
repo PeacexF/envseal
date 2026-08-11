@@ -194,6 +194,15 @@ them, and both take `--json`.
 ## CI
 
 ```yaml
+- uses: PeacexF/envseal/action@v1.0.1
+  env:
+    ENVSEAL_IDENTITY: ${{ secrets.ENVSEAL_IDENTITY }}
+```
+
+That installs a checksum-verified binary and validates the project, annotating
+failures on the pull request. Or do it yourself:
+
+```yaml
 - name: Run tests
   env:
     ENVSEAL_IDENTITY: ${{ secrets.ENVSEAL_IDENTITY }}
@@ -259,6 +268,7 @@ adopting this for anything that matters.
 - [Key management](docs/key-management.md) — identities, rotation, recovery
 - [CI](docs/ci.md) — GitHub Actions, GitLab, Jenkins, Docker, deployment
 - [Security](docs/security.md) — threat model and internal behaviour
+- [GitHub Action](action/README.md) — validate encrypted environments in CI
 - [Architecture](docs/architecture.md) — how the code fits together
 
 ## Design

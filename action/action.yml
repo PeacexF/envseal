@@ -1,0 +1,100 @@
+name: envseal
+description: Install envseal and validate a project's encrypted environment
+author: PeacexF
+
+branding:
+  icon: lock
+  color: purple
+
+inputs:
+  version:
+    description: 'Release to install, such as "v1.0.1", or "latest".'
+    required: false
+    default: latest
+
+  check:
+    description: 'Run `envseal check` after installing. Set to "false" to only install.'
+    required: false
+    default: "true"
+
+  args:
+    description: "Extra arguments for `envseal check`, such as --strict."
+    required: false
+    default: ""
+
+  working-directory:
+    description: "Directory to run in."
+    required: false
+    default: "."
+
+  fail-on-problems:
+    description: 'Fail the job when a check fails. Set to "false" to annotate only.'
+    required: false
+    default: "true"
+
+outputs:
+  version:
+    description: The version that was installed.
+    value: ${{ steps.install.outputs.version }}
+  problems:
+    description: Number of failed checks.
+    value: ${{ steps.annotate.outputs.problems }}
+  warnings:
+    description: Number of warnings.
+    value: ${{ steps.annotate.outputs.warnings }}
+
+runs:
+  using: composite
+
+  steps:
+    # The identity is deliberately not an input. Action inputs appear in the
+    # workflow file and in logs; a private key belongs in `env:` from a secret:
+    #
+    #   env:
+    #     ENVSEAL_IDENTITY: ${{ secrets.ENVSEAL_IDENTITY }}
+    #
+    # Without one, `check` still runs: the decrypt and schema checks report
+    # themselves as skipped, and plaintext detection — the check that catches a
+    # committed .env — works regardless. That makes this useful on fork pull
+    # requests, which never receive secrets.
+    - name: Install envseal
+      id: install
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        "${{ github.action_path }}/install.sh" "${{ inputs.version }}" "${RUNNER_TEMP}/envseal"
+        echo "${RUNNER_TEMP}/envseal" >> "$GITHUB_PATH"
+        echo "version=$("${RUNNER_TEMP}/envseal/envseal" --version | cut -d' ' -f2)" >> "$GITHUB_OUTPUT"
+
+    - name: Report
+      if: inputs.check == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        {
+          echo "### envseal"
+          echo
+          echo '```'
+          envseal check ${{ inputs.args }} 2>&1 || true
+          echo '```'
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Annotate
+      id: annotate
+      if: inputs.check == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        envseal check --json ${{ inputs.args }} > "${RUNNER_TEMP}/envseal-report.json" || true
+        "${{ github.action_path }}/annotate.sh" "${RUNNER_TEMP}/envseal-report.json"
+
+    - name: Fail on problems
+      if: inputs.check == 'true' && inputs.fail-on-problems == 'true'
+      shell: bash
+      run: |
+        problems="${{ steps.annotate.outputs.problems }}"
+        if [ "${problems:-0}" -gt 0 ]; then
+          echo "envseal found $problems problem(s); see the annotations above." >&2
+          exit 1
+        fi
