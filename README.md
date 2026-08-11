@@ -53,18 +53,27 @@ ASCII-armored age ciphertext, so Git treats it as an ordinary text file.
 
 ## Install
 
+**Homebrew**
+
+```bash
+brew install PeacexF/tap/envseal
+```
+
+**Binary** — download an archive from [Releases](https://github.com/PeacexF/envseal/releases),
+verify it, and put `envseal` on your `PATH`:
+
+```bash
+sha256sum -c checksums.txt --ignore-missing
+```
+
+**From source**
+
 ```bash
 go install github.com/PeacexF/envseal/cmd/envseal@latest
 ```
 
-Or from a clone:
-
-```bash
-make build      # → bin/envseal
-make install    # → $GOPATH/bin
-```
-
-Binary releases and a Homebrew formula are planned.
+Binaries are statically linked with no runtime dependencies, for linux, macOS,
+and Windows on amd64 and arm64.
 
 ## Quickstart
 

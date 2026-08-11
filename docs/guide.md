@@ -31,7 +31,20 @@ and [Daily use](#daily-use). Everything after that is there when you need it.
 
 ## Install
 
-Envseal is a single binary with no runtime dependencies.
+Envseal is a single statically linked binary with no runtime dependencies.
+
+```bash
+brew install PeacexF/tap/envseal
+```
+
+Or download an archive from [Releases](https://github.com/PeacexF/envseal/releases)
+and verify it against `checksums.txt`:
+
+```bash
+sha256sum -c checksums.txt --ignore-missing
+```
+
+Or install from source:
 
 ```bash
 go install github.com/PeacexF/envseal/cmd/envseal@latest

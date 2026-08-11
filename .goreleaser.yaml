@@ -1,0 +1,144 @@
+version: 2
+
+project_name: envseal
+
+before:
+  hooks:
+    - go mod tidy
+    - go vet ./...
+    - go test ./...
+
+    # Shell completions ship in the archive, so the Homebrew cask can install
+    # them. Generated from the source being released, never checked in.
+    - mkdir -p completions
+    - sh -c 'go run ./cmd/envseal completion bash > completions/envseal.bash'
+    - sh -c 'go run ./cmd/envseal completion zsh  > completions/_envseal'
+    - sh -c 'go run ./cmd/envseal completion fish > completions/envseal.fish'
+    - sh -c 'go run ./cmd/envseal completion powershell > completions/envseal.ps1'
+
+builds:
+  - id: envseal
+    main: ./cmd/envseal
+    binary: envseal
+
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X github.com/PeacexF/envseal/internal/version.Version={{ .Version }}
+
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: envseal
+    ids: [envseal]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE
+      - SECURITY.md
+      - src: docs/*.md
+        dst: docs
+      - src: completions/*
+        dst: completions
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^.*?feat(\(.+\))??!?:.+$'
+      order: 0
+    - title: Fixes
+      regexp: '^.*?fix(\(.+\))??!?:.+$'
+      order: 1
+    - title: Security
+      regexp: '^.*?sec(urity)?(\(.+\))??!?:.+$'
+      order: 2
+    - title: Other
+      order: 99
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch
+
+release:
+  draft: false
+  prerelease: auto
+  footer: |
+    ## Install
+
+    ```bash
+    brew install PeacexF/tap/envseal
+    ```
+
+    Or download an archive below and put `envseal` on your `PATH`.
+
+    ## Verify the download
+
+    ```bash
+    sha256sum -c checksums.txt --ignore-missing
+    ```
+
+    Every binary is statically linked, built with `-trimpath`, and reproducible
+    from the tagged commit.
+
+    ## After installing
+
+    ```bash
+    envseal keys generate   # once per machine
+    envseal init            # Publishing to a tap needs a repository and a token. Without them the release
+
+homebrew_casks:
+  - name: envseal
+    ids: [envseal]
+    binaries: [envseal]
+    skip_upload: '{{ if index .Env "HOMEBREW_TAP_TOKEN" }}false{{ else }}true{{ end }}'
+    repository:
+      owner: PeacexF
+      name: homebrew-tap
+      token: '{{ index .Env "HOMEBREW_TAP_TOKEN" }}'
+    directory: Casks
+    homepage: https://github.com/PeacexF/envseal
+    description: Git-friendly encrypted .env files
+    license: MIT
+    commit_author:
+      name: envseal-release
+      email: noreply@github.com
+
+    completions:
+      bash: completions/envseal.bash
+      zsh: completions/_envseal
+      fish: completions/envseal.fish
+
+    hooks:
+      post:
+        # macOS quarantines downloaded binaries; without this the first run is
+        # blocked by Gatekeeper.
+        install: |
+          if OS.mac?
+            system "xattr", "-d", "-r", "com.apple.quarantine", "#{staged_path}/envseal"
+          end

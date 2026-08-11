@@ -44,3 +44,5 @@ coverage.out
 !.env.example
 !*.enc
 scratch
+/dist/
+/completions/
