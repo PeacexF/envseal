@@ -15,6 +15,15 @@ func run(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	return code, out.String(), errOut.String()
 }
 
+// runInput drives a command that asks for confirmation, with a terminal-like
+// stdin supplying the answer.
+func runInput(t *testing.T, input string, args ...string) (code int, stdout, stderr string) {
+	t.Helper()
+	var out, errOut bytes.Buffer
+	code = cli.RunStreams(args, cli.Streams{In: strings.NewReader(input), Out: &out, Err: &errOut, Interactive: true})
+	return code, out.String(), errOut.String()
+}
+
 func TestVersion(t *testing.T) {
 	code, stdout, stderr := run(t, "--version")
 	if code != 0 {

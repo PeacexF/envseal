@@ -53,7 +53,7 @@ func newStatusCmd(a *app) *cobra.Command {
 				enc.SetIndent("", "  ")
 				return enc.Encode(r)
 			}
-			r.render(out, isTerminal(out))
+			r.render(out, a.interactive)
 			return nil
 		},
 	}

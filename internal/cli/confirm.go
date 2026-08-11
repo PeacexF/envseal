@@ -13,13 +13,13 @@ import (
 // confirm asks before an action that reaches outside this machine. Silence is
 // never taken as consent: without a terminal and without --yes, the command
 // refuses rather than proceeding or hanging on a prompt nobody can answer.
-func confirm(cmd *cobra.Command, assumeYes bool, question string) error {
+func (a *app) confirm(cmd *cobra.Command, assumeYes bool, question string) error {
 	if assumeYes {
 		return nil
 	}
 
 	out := cmd.OutOrStdout()
-	if !isTerminal(out) {
+	if !a.interactive {
 		return errs.New(errs.CodeGeneral, "cannot ask for confirmation").
 			Detailf("This would %s, and there is no terminal to confirm on.", question).
 			Check("pass --yes to run without confirmation")

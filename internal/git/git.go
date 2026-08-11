@@ -14,6 +14,7 @@ import (
 	"errors"
 	"io"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/PeacexF/envseal/internal/errs"
@@ -150,16 +151,76 @@ func (r *Repo) Push(stdout, stderr io.Writer) error {
 	return nil
 }
 
-// Pull fast-forwards only. A merge that needs a decision is the user's to make,
-// not something a secrets tool should resolve on its own.
-func (r *Repo) Pull(stdout, stderr io.Writer) error {
-	if err := stream(r.Root, stdout, stderr, "pull", "--ff-only"); err != nil {
-		return errs.New(errs.CodeGit, "unable to fast-forward").
-			Detailf("Your branch and its upstream have diverged, or the working tree is dirty.").
-			Check("run `git pull` yourself and resolve it",
-				"encrypted files cannot be merged line by line: pick one side, then re-encrypt")
+// Fetch updates remote-tracking refs without touching the working tree or the
+// current branch. Reading the shared environment must not move someone's work.
+func (r *Repo) Fetch(stdout, stderr io.Writer) error {
+	if err := stream(r.Root, stdout, stderr, "fetch"); err != nil {
+		return errs.New(errs.CodeGit, "unable to fetch").
+			Check("check your network and credentials",
+				"pass --no-git to decrypt the file you already have")
 	}
 	return nil
+}
+
+// Show reads a file's contents at a revision, without checking anything out.
+// path must be relative to the repository root.
+func (r *Repo) Show(ref, path string) ([]byte, error) {
+	cmd := exec.Command("git", "show", ref+":"+path)
+	cmd.Dir = r.Root
+
+	var out, errOut bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+
+	if err := cmd.Run(); err != nil {
+		return nil, errors.New(strings.TrimSpace(errOut.String()))
+	}
+	return out.Bytes(), nil
+}
+
+// Relative expresses an absolute path the way git refers to it.
+//
+// Symlinks are resolved on both sides first: git reports its root through the
+// real filesystem, while a working directory may be reached through a link —
+// on macOS /var is /private/var — and comparing the two directly yields a
+// path full of "..".
+func (r *Repo) Relative(path string) (string, error) {
+	root := resolve(r.Root)
+
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	// The file itself may not exist yet, so resolve its directory.
+	abs = filepath.Join(resolve(filepath.Dir(abs)), filepath.Base(abs))
+
+	rel, err := filepath.Rel(root, abs)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", errors.New("path is outside the repository")
+	}
+	return filepath.ToSlash(rel), nil
+}
+
+func resolve(path string) string {
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		return real
+	}
+	return path
+}
+
+// Unpushed lists the commits on the current branch that the upstream lacks.
+func (r *Repo) Unpushed(upstream string, paths ...string) ([]string, error) {
+	args := append([]string{"log", "--oneline", "--no-decorate", upstream + "..HEAD", "--"}, paths...)
+	out, err := run(r.Root, args...)
+	if err != nil {
+		return nil, gitError("inspect unpushed commits", err)
+	}
+	if out == "" {
+		return nil, nil
+	}
+	return strings.Split(out, "\n"), nil
 }
 
 func run(dir string, args ...string) (string, error) {

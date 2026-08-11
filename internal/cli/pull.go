@@ -1,11 +1,11 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -15,17 +15,17 @@ import (
 	"github.com/PeacexF/envseal/internal/git"
 	"github.com/PeacexF/envseal/internal/identity"
 	"github.com/PeacexF/envseal/internal/safefile"
+	"github.com/PeacexF/envseal/internal/syncstate"
 )
 
 const pullLong = `Fetch the shared environment and decrypt it locally.
 
-  git pull → .env.enc → .env
+Only your .env is written. Envseal fetches and reads the encrypted file straight
+out of the upstream branch, so your own branch, working tree, and staged changes
+are left exactly as they were — this works even with uncommitted work in
+progress. Run git pull yourself when you want the rest of the repository.
 
-Envseal summarizes which variables changed by name, never by value, so you can
-see what a teammate altered without exposing anything.
-
-A local .env you have edited since the last sync is not overwritten without
---force.`
+Changed variables are summarized by name, never by value.`
 
 func newPullCmd(a *app) *cobra.Command {
 	var (
@@ -46,24 +46,6 @@ func newPullCmd(a *app) *cobra.Command {
 			}
 			out := a.stdout(cmd)
 
-			if !noGit {
-				repo, err := git.Open(ws.Project.Root)
-				switch {
-				case errors.Is(err, git.ErrNotRepo):
-					fmt.Fprint(out, "Not a git repository, so nothing was fetched.\n")
-				case err != nil:
-					return err
-				default:
-					if err := repo.Pull(out, cmd.ErrOrStderr()); err != nil {
-						return err
-					}
-					// Reload: the pull may have changed the recipient list.
-					if ws, err = a.workspace(); err != nil {
-						return err
-					}
-				}
-			}
-
 			source := ws.encryptedPath()
 			if len(args) == 1 {
 				source = args[0]
@@ -73,10 +55,9 @@ func newPullCmd(a *app) *cobra.Command {
 				return err
 			}
 
-			ciphertext, err := os.ReadFile(source)
+			ciphertext, origin, err := a.fetchSealed(cmd, ws, source, noGit, force)
 			if err != nil {
-				return errs.New(errs.CodeConfig, "no encrypted file at %s", display(source)).
-					Check("run `envseal push` to create one")
+				return err
 			}
 
 			id, err := identity.Resolve(a.identityPath)
@@ -85,7 +66,7 @@ func newPullCmd(a *app) *cobra.Command {
 			}
 			warn(cmd.ErrOrStderr(), id)
 
-			plaintext, err := crypto.Decrypt(ciphertext, id.Identities(), display(source))
+			plaintext, err := crypto.Decrypt(ciphertext, id.Identities(), origin)
 			if err != nil {
 				return err
 			}
@@ -93,11 +74,11 @@ func newPullCmd(a *app) *cobra.Command {
 
 			current, hadLocal := readLocal(target)
 			if hadLocal {
-				if slices.Equal(current, plaintext) {
-					fmt.Fprintf(out, "Already up to date: %s matches %s\n", display(target), display(source))
+				if bytes.Equal(current, plaintext) {
+					fmt.Fprintf(out, "Already up to date: %s matches %s\n", display(target), origin)
 					return nil
 				}
-				if err := guardLocalEdits(target, source, force); err != nil {
+				if err := a.guardLocalEdits(target, source, current, force); err != nil {
 					return err
 				}
 			}
@@ -106,15 +87,81 @@ func newPullCmd(a *app) *cobra.Command {
 				return errs.New(errs.CodeGeneral, "unable to write %s", display(target)).Wrap(err)
 			}
 
-			fmt.Fprintf(out, "Decrypted %s → %s\n", display(source), display(target))
-			summarize(out, current, plaintext, display(source))
+			syncstate.Record(target, plaintext)
+
+			fmt.Fprintf(out, "Decrypted %s → %s\n", origin, display(target))
+			summarize(out, current, plaintext, origin)
 			return nil
 		},
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "overwrite a locally modified environment file")
-	cmd.Flags().BoolVar(&noGit, "no-git", false, "decrypt without fetching first")
+	cmd.Flags().BoolVar(&noGit, "no-git", false, "decrypt the local file without fetching")
 	return cmd
+}
+
+// fetchSealed returns the ciphertext to decrypt and a label describing where it
+// came from. It reads from the upstream branch without checking anything out,
+// so nothing in the repository is modified.
+func (a *app) fetchSealed(cmd *cobra.Command, ws *workspace, source string, noGit, force bool) ([]byte, string, error) {
+	local := func() ([]byte, string, error) {
+		data, err := os.ReadFile(source)
+		if err != nil {
+			return nil, "", errs.New(errs.CodeConfig, "no encrypted file at %s", display(source)).
+				Check("run `envseal push` to create one")
+		}
+		return data, display(source), nil
+	}
+
+	if noGit {
+		return local()
+	}
+
+	out := a.stdout(cmd)
+
+	repo, err := git.Open(ws.Project.Root)
+	if errors.Is(err, git.ErrNotRepo) {
+		fmt.Fprint(out, "Not a git repository, so nothing was fetched.\n")
+		return local()
+	}
+	if err != nil {
+		return nil, "", err
+	}
+
+	if err := repo.Fetch(out, cmd.ErrOrStderr()); err != nil {
+		return nil, "", err
+	}
+
+	upstream, err := repo.Upstream()
+	if err != nil {
+		fmt.Fprint(out, "No upstream branch, so the local file was used.\n")
+		return local()
+	}
+
+	path, err := repo.Relative(source)
+	if err != nil {
+		return local()
+	}
+
+	sealed, err := repo.Show(upstream, path)
+	if err != nil {
+		fmt.Fprintf(out, "%s does not exist on %s yet, so the local file was used.\n", path, upstream)
+		return local()
+	}
+
+	// Taking the upstream copy would undo an environment change you have
+	// committed but not yet pushed.
+	if !force {
+		unpushed, err := repo.Unpushed(upstream, source)
+		if err == nil && len(unpushed) > 0 {
+			return nil, "", errs.New(errs.CodeGit, "you have unpushed changes to %s", path).
+				Detailf("Taking the copy from %s would discard them.", upstream).
+				Check("run `envseal push` to share your version first",
+					"pass --force to take the upstream version anyway")
+		}
+	}
+
+	return sealed, upstream + ":" + path, nil
 }
 
 func readLocal(path string) ([]byte, bool) {
@@ -122,28 +169,39 @@ func readLocal(path string) ([]byte, bool) {
 	return data, err == nil
 }
 
-// guardLocalEdits refuses to discard local work. Whether the file was edited is
-// judged by modification time, which is a heuristic: git refreshes .env.enc when
-// it pulls, so a .env that is newer than the ciphertext was almost certainly
-// changed by hand afterwards.
-func guardLocalEdits(target, source string, force bool) error {
-	if force {
-		return nil
-	}
-
-	local, err := os.Stat(target)
-	if err != nil {
-		return nil
-	}
-	sealed, err := os.Stat(source)
-	if err != nil || !local.ModTime().After(sealed.ModTime()) {
+// guardLocalEdits refuses to discard hand edits.
+//
+// A file is safe to replace when it is exactly what envseal last wrote: either
+// according to the recorded sync, or because it still matches what the local
+// encrypted file decrypts to. Anything else has been edited since.
+func (a *app) guardLocalEdits(target, sealed string, current []byte, force bool) error {
+	if force || syncstate.Matches(target, current) || a.matchesSealed(sealed, current) {
 		return nil
 	}
 
 	return errs.New(errs.CodeGeneral, "%s has local changes", display(target)).
-		Detailf("It was modified after %s, so overwriting it would discard your edits.", display(source)).
+		Detailf("It is not what envseal last wrote, so overwriting it would discard your edits.").
 		Check("run `envseal push` to share your changes first",
 			"pass --force to discard them")
+}
+
+// matchesSealed reports whether content is what the local encrypted file holds.
+func (a *app) matchesSealed(sealed string, content []byte) bool {
+	existing, err := os.ReadFile(sealed)
+	if err != nil {
+		return false
+	}
+	id, err := identity.Resolve(a.identityPath)
+	if err != nil {
+		return false
+	}
+	previous, err := crypto.Decrypt(existing, id.Identities(), sealed)
+	if err != nil {
+		return false
+	}
+	defer clear(previous)
+
+	return bytes.Equal(previous, content)
 }
 
 // summarize reports which variables changed, by name only. Values are compared

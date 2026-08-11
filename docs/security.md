@@ -92,6 +92,7 @@ or pipe the output, or pass `--force` to override deliberately.
 | `~/.envseal/identity` | `0600` |
 | Decrypted plaintext | `0600` |
 | `.env.enc`, `.envseal.yaml` | `0644` (meant to be committed) |
+| `~/.envseal/sync/*` | `0600` |
 
 Envseal warns when an identity file is group- or world-readable. It warns rather
 than refusing, because CI checkouts sometimes have modes you cannot control.
@@ -116,6 +117,14 @@ Only an uncatchable kill (`SIGKILL`, power loss) between write and rename can
 leave residue, and that residue is owner-only. The alternative — non-atomic
 writes — trades this narrow window for corrupted files on any interruption,
 which is worse.
+
+### Sync fingerprints
+
+`envseal pull` records a SHA-256 of each plaintext file it writes, under
+`~/.envseal/sync/`, so a later pull can tell an untouched file from one you
+edited. It stores the hash, never the content, and never in the repository. A
+hash confirms a guess but does not reveal a secret, and the directory sits
+alongside your private key with the same permissions.
 
 ### Memory
 

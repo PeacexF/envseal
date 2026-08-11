@@ -209,3 +209,84 @@ func TestPullWrongIdentity(t *testing.T) {
 		t.Errorf("exit = %d, want 3", code)
 	}
 }
+
+// Pull must not touch the repository: no branch movement, no working-tree
+// changes to anything, not even envseal's own files.
+func TestPullLeavesTheRepositoryUntouched(t *testing.T) {
+	dir, remote := gitRepo(t)
+	other, identityPath := teammate(t, remote)
+
+	// A teammate changes unrelated files and the environment upstream.
+	t.Chdir(dir)
+	writeEnv(t, dir, "app.txt", "v2\n")
+	mustGit(t, dir, "add", "app.txt")
+	mustGit(t, dir, "commit", "-m", "Unrelated upstream change")
+	writeEnv(t, dir, ".env", env+"NEW_ONE=1\n")
+	if code, _, stderr := run(t, "push", "--yes"); code != 0 {
+		t.Fatalf("push: exit = %d (stderr: %s)", code, stderr)
+	}
+
+	t.Chdir(other)
+	headBefore := mustGit(t, other, "rev-parse", "HEAD")
+	statusBefore := mustGit(t, other, "status", "--porcelain")
+
+	if code, stdout, stderr := run(t, "--identity", identityPath, "pull"); code != 0 {
+		t.Fatalf("exit = %d (stderr: %s)", code, stderr)
+	} else if !strings.Contains(stdout, "+ NEW_ONE") {
+		t.Errorf("stdout =\n%s\nwant the new variable", stdout)
+	}
+
+	if head := mustGit(t, other, "rev-parse", "HEAD"); head != headBefore {
+		t.Error("pull moved the branch")
+	}
+	if status := mustGit(t, other, "status", "--porcelain"); status != statusBefore {
+		t.Errorf("pull changed the working tree: %q, was %q", status, statusBefore)
+	}
+	if _, err := os.Stat(filepath.Join(other, "app.txt")); err == nil {
+		t.Error("pull brought in an unrelated file")
+	}
+}
+
+// Fetching from a ref works regardless of local state, unlike `git pull`.
+func TestPullWorksWithADirtyWorkingTree(t *testing.T) {
+	dir, remote := gitRepo(t)
+	other, identityPath := teammate(t, remote)
+
+	t.Chdir(dir)
+	writeEnv(t, dir, ".env", env+"ANOTHER=1\n")
+	if code, _, stderr := run(t, "push", "--yes"); code != 0 {
+		t.Fatalf("push: exit = %d (stderr: %s)", code, stderr)
+	}
+
+	t.Chdir(other)
+	writeEnv(t, other, "app.txt", "uncommitted work in progress\n")
+
+	if code, _, stderr := run(t, "--identity", identityPath, "pull"); code != 0 {
+		t.Fatalf("exit = %d, want 0 with a dirty tree (stderr: %s)", code, stderr)
+	}
+	if got := read(t, filepath.Join(other, "app.txt")); got != "uncommitted work in progress\n" {
+		t.Errorf("app.txt = %q, want the local work preserved", got)
+	}
+}
+
+// Taking the upstream copy must not silently undo an unpushed change.
+func TestPullRefusesToDiscardUnpushedEnvironment(t *testing.T) {
+	_, _ = gitRepo(t)
+
+	if code, _, stderr := run(t, "push", "--yes"); code != 0 {
+		t.Fatalf("push: exit = %d (stderr: %s)", code, stderr)
+	}
+	// Commit an environment change locally without pushing it.
+	writeEnv(t, ".", ".env", env+"LOCAL_ONLY=1\n")
+	if code, _, stderr := run(t, "push", "--yes", "--no-push"); code != 0 {
+		t.Fatalf("push --no-push: exit = %d (stderr: %s)", code, stderr)
+	}
+
+	code, _, stderr := run(t, "pull")
+	if code != 6 {
+		t.Errorf("exit = %d, want 6", code)
+	}
+	if !strings.Contains(stderr, "unpushed") {
+		t.Errorf("stderr =\n%s\nwant it to report unpushed changes", stderr)
+	}
+}

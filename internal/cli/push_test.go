@@ -263,3 +263,39 @@ func TestPushOutsideARepository(t *testing.T) {
 		t.Errorf("it should still encrypt: %v", err)
 	}
 }
+
+// git pushes whole branches, so unrelated commits ride along. That must be
+// disclosed at the confirmation rather than happening quietly.
+func TestPushDisclosesOtherUnpushedCommits(t *testing.T) {
+	dir, _ := gitRepo(t)
+
+	writeEnv(t, dir, "app.txt", "v2\n")
+	mustGit(t, dir, "add", "app.txt")
+	mustGit(t, dir, "commit", "-m", "Unrelated work in progress")
+
+	// Answering "n" both proves the prompt appeared and stops the push.
+	code, stdout, _ := runInput(t, "n\n", "push")
+	if code != 1 {
+		t.Errorf("exit = %d, want 1 for a declined push", code)
+	}
+	for _, want := range []string{"1 other commit", "Unrelated work in progress"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("prompt =\n%s\nwant it to disclose %q", stdout, want)
+		}
+	}
+}
+
+func TestPushConfirmationAccepted(t *testing.T) {
+	_, remote := gitRepo(t)
+
+	code, stdout, stderr := runInput(t, "y\n", "push")
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0 (stderr: %s)", code, stderr)
+	}
+	if !strings.Contains(stdout, "Will commit") {
+		t.Errorf("stdout =\n%s\nwant the confirmation prompt", stdout)
+	}
+	if log := remoteLog(t, remote); !strings.Contains(log, ".env.enc") {
+		t.Error("confirming did not push")
+	}
+}

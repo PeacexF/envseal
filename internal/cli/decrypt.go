@@ -13,6 +13,7 @@ import (
 	"github.com/PeacexF/envseal/internal/errs"
 	"github.com/PeacexF/envseal/internal/identity"
 	"github.com/PeacexF/envseal/internal/safefile"
+	"github.com/PeacexF/envseal/internal/syncstate"
 )
 
 const (
@@ -72,7 +73,7 @@ func newDecryptCmd(a *app) *cobra.Command {
 			}
 
 			if output == "-" {
-				return writeToStdout(cmd, plaintext, force)
+				return a.writeToStdout(cmd, plaintext, force)
 			}
 
 			target := output
@@ -87,6 +88,7 @@ func newDecryptCmd(a *app) *cobra.Command {
 			if err := safefile.Write(target, plaintext, plaintextFileMode); err != nil {
 				return errs.New(errs.CodeGeneral, "unable to write %s", target).Wrap(err)
 			}
+			syncstate.Record(target, plaintext)
 
 			fmt.Fprintf(a.stdout(cmd), "Decrypted %s → %s\n", display(source), display(target))
 			return nil
@@ -120,9 +122,9 @@ func refuseClobber(target string, force bool) error {
 
 // writeToStdout guards against secrets landing in a terminal's scrollback,
 // where they outlive the command in shell history and screen buffers.
-func writeToStdout(cmd *cobra.Command, plaintext []byte, force bool) error {
+func (a *app) writeToStdout(cmd *cobra.Command, plaintext []byte, force bool) error {
 	out := cmd.OutOrStdout()
-	if isTerminal(out) && !force {
+	if a.interactive && !force {
 		return errs.New(errs.CodeGeneral, "refusing to print secrets to a terminal").
 			Detailf("They would remain visible in your scrollback.").
 			Check("redirect the output, as in `envseal decrypt -o - > .env`",

@@ -8,8 +8,6 @@ import (
 	"os/user"
 	"strings"
 
-	"golang.org/x/term"
-
 	"github.com/PeacexF/envseal/internal/config"
 	"github.com/PeacexF/envseal/internal/errs"
 	"github.com/PeacexF/envseal/internal/identity"
@@ -61,13 +59,6 @@ func warn(w io.Writer, id *identity.Identity) {
 	for _, msg := range id.Warnings {
 		fmt.Fprintf(w, "Warning: %s\n", msg)
 	}
-}
-
-// isTerminal reports whether w is an interactive terminal. A test buffer or a
-// redirected stream is not, which is what makes secrets safe to write there.
-func isTerminal(w io.Writer) bool {
-	f, ok := w.(*os.File)
-	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 // selfName labels the recipient created when bootstrapping a project.

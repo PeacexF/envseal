@@ -331,6 +331,19 @@ because nobody was there to say no.
 | `--no-push` | Commit locally, don't push |
 | `--no-commit` | Encrypt and stage only |
 
+**What push touches.** The commit contains only `.env.enc` and `.envseal.yaml`.
+Git pushes whole branches, though, so any other commits waiting on your branch
+go with it — there is no way to push one commit without its ancestors. Envseal
+cannot change that, so it discloses it instead:
+
+```
+Will commit .env.enc and push to origin/main.
+
+This also pushes 1 other commit already on this branch:
+  2fe2b62 Another unrelated commit
+Continue? [y/N]
+```
+
 **What push refuses to do:**
 
 - **Continues nothing if your plaintext `.env` is tracked by Git.** This is the
@@ -354,11 +367,9 @@ would add a meaningless whole-file diff to your history.
 
 ```
 $ envseal pull
-Updating 9b999cc..fca48db
-Fast-forward
- .env.enc      | 14 ++++++++------
- .envseal.yaml |  2 ++
-Decrypted .env.enc → .env
+From github.com/you/project
+   c9d5faf..0f40205  main -> origin/main
+Decrypted origin/main:.env.enc → .env
 
 + STRIPE_WEBHOOK_SECRET
 ~ DATABASE_URL
@@ -368,8 +379,22 @@ Decrypted .env.enc → .env
 The summary is the useful part: you can see that a teammate added one variable
 and changed another **without either of you exposing a value**.
 
-`pull` fast-forwards only. A divergent history needs a human decision, and a
-secrets tool should not be making it.
+**Pull changes nothing but your `.env`.** It fetches, then reads the encrypted
+file straight out of the upstream branch — it never checks anything out. Your
+branch does not move, no tracked file changes, and nothing is staged:
+
+```
+$ git status --porcelain     # before
+ M app.txt
+$ envseal pull
+$ git status --porcelain     # after: identical
+ M app.txt
+```
+
+Because nothing is checked out, **this works with a dirty working tree**, where
+`git pull` would refuse. Getting the current secrets and advancing your branch
+are separate concerns; run `git pull` yourself when you want the rest of the
+repository.
 
 | Flag | Effect |
 |---|---|
@@ -382,16 +407,21 @@ discarding your work:
 ```
 Error: .env has local changes
 
-It was modified after .env.enc, so overwriting it would discard your edits.
+It is not what envseal last wrote, so overwriting it would discard your edits.
 
 Check:
   • run `envseal push` to share your changes first
   • pass --force to discard them
 ```
 
-This is judged by modification time — a heuristic, not a guarantee. Git
-refreshes `.env.enc` when it pulls, so a `.env` newer than the ciphertext was
-almost certainly changed by hand.
+To tell an edited file from a merely stale one, envseal records a SHA-256 of
+each `.env` it writes under `~/.envseal/sync/`. The fingerprint lives in your
+home directory, never in the repository, and it is a hash rather than the
+content: enough to recognise a file envseal produced, useless for recovering
+what was in it.
+
+Pull also refuses to take the upstream copy when you have **committed** an
+environment change that is not pushed yet, since that would quietly undo it.
 
 ### Granting access with push
 

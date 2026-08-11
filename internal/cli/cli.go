@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/PeacexF/envseal/internal/errs"
 	"github.com/PeacexF/envseal/internal/version"
@@ -21,28 +22,62 @@ decrypt it.
 
 Envseal needs no account, no server, and no network access.`
 
-// Main runs envseal against the process streams and returns the exit code.
-func Main(args []string) int {
-	return Run(args, os.Stdout, os.Stderr)
+// Streams are what a command reads and writes.
+type Streams struct {
+	In  io.Reader
+	Out io.Writer
+	Err io.Writer
+
+	// Interactive reports whether a person is watching. It decides whether
+	// envseal may ask a question, and whether printing a secret would leave it
+	// in a terminal's scrollback.
+	Interactive bool
 }
 
+// Main runs envseal against the process streams and returns the exit code.
+func Main(args []string) int {
+	return RunStreams(args, Streams{
+		In:          os.Stdin,
+		Out:         os.Stdout,
+		Err:         os.Stderr,
+		Interactive: isTerminal(os.Stdout),
+	})
+}
+
+// Run executes with the given output streams, without a terminal.
 func Run(args []string, stdout, stderr io.Writer) int {
-	root := NewRoot()
+	return RunStreams(args, Streams{Out: stdout, Err: stderr})
+}
+
+func RunStreams(args []string, s Streams) int {
+	a := &app{interactive: s.Interactive}
+
+	root := newRoot(a)
 	root.SetArgs(args)
-	root.SetOut(stdout)
-	root.SetErr(stderr)
+	root.SetOut(s.Out)
+	root.SetErr(s.Err)
+	if s.In != nil {
+		root.SetIn(s.In)
+	}
 
 	err := root.Execute()
 	if err != nil {
-		errs.Render(stderr, err)
+		errs.Render(s.Err, err)
 	}
 	return int(errs.CodeOf(err))
+}
+
+// isTerminal reports whether w is an interactive terminal.
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	return ok && term.IsTerminal(int(f.Fd()))
 }
 
 // app holds the global flags shared by every command.
 type app struct {
 	identityPath string
 	quiet        bool
+	interactive  bool
 }
 
 // stdout is where a command writes its progress chatter, which --quiet
@@ -55,9 +90,10 @@ func (a *app) stdout(cmd *cobra.Command) io.Writer {
 	return cmd.OutOrStdout()
 }
 
-func NewRoot() *cobra.Command {
-	a := &app{}
+// NewRoot builds the command tree for a non-interactive invocation.
+func NewRoot() *cobra.Command { return newRoot(&app{}) }
 
+func newRoot(a *app) *cobra.Command {
 	root := &cobra.Command{
 		Use:   "envseal",
 		Short: "Git-friendly encrypted .env files",
