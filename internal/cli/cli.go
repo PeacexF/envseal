@@ -39,7 +39,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return int(errs.CodeOf(err))
 }
 
+// app holds the global flags shared by every command.
+type app struct {
+	identityPath string
+}
+
 func NewRoot() *cobra.Command {
+	a := &app{}
+
 	root := &cobra.Command{
 		Use:   "envseal",
 		Short: "Git-friendly encrypted .env files",
@@ -57,6 +64,11 @@ func NewRoot() *cobra.Command {
 
 	root.SetVersionTemplate("envseal {{.Version}}\n")
 	root.CompletionOptions.DisableDefaultCmd = true
+
+	root.PersistentFlags().StringVar(&a.identityPath, "identity", "",
+		"path to your private identity (default ~/.envseal/identity)")
+
+	root.AddCommand(newInitCmd(a))
 
 	return root
 }
