@@ -79,8 +79,38 @@ rm .github/workflows/autobump.yml   # GoReleaser bumps the version itself
 git commit -am "Remove formula-only workflows" && git push
 ```
 
-Keep `tests.yml` if you want `brew test-bot` on pull requests to the tap; it is
-harmless either way, since GoReleaser commits to the default branch directly.
+`tests.yml` needs replacing rather than keeping. It runs
+`brew test-bot --only-tap-syntax`, which includes `brew style` — and GoReleaser's
+generated cask does not satisfy Homebrew's layout rules: it emits `on_intel`
+before `on_arm`, with blank lines Homebrew wants closed up. That is six
+autocorrectable offences on **every** release, and a tap-level `.rubocop.yml`
+does not silence them (verified: `brew style` ignores it for casks).
+
+The other two checks in that step are worth keeping, so run them directly:
+
+```yaml
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: Homebrew/actions/setup-homebrew@master
+      - run: brew tap PeacexF/tap
+      # Deliberately not `brew test-bot --only-tap-syntax`: it runs `brew style`,
+      # which lints a file GoReleaser generates and we cannot reformat.
+      - run: brew readall --aliases --os=all --arch=all peacexf/tap
+      - run: brew audit --except=installed --tap=peacexf/tap
+```
+
+`readall` catches a cask that fails to load and `audit` catches a bad URL or
+description — the failures that would actually break an install. Only the
+layout check is dropped.
 
 ### Give the release a token
 
