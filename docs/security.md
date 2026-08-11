@@ -143,6 +143,11 @@ The complete list:
 | `github.com/spf13/cobra` | Command-line parsing and completion |
 | `golang.org/x/term` | Detecting whether output is a terminal |
 
+`envseal push` and `envseal pull` additionally invoke the **`git` binary** you
+already have. Shelling out rather than embedding a Git library means your
+credentials, SSH agent, signing keys, and hooks keep working, and envseal never
+handles them. No other command needs git.
+
 A small dependency surface is a security property. CI runs `govulncheck` on
 every push.
 
@@ -153,6 +158,9 @@ Security-relevant behaviour is covered by tests rather than by intent:
 - no secret or `AGE-SECRET-KEY-` appears in any command's stdout or stderr;
 - file modes are asserted after every write;
 - `envseal run` leaves no plaintext in the project directory or in `TMPDIR`;
+- `envseal push` refuses when the plaintext `.env` is tracked by git, commits
+  only the files it manages, and its pushed output is verified to be armored
+  ciphertext containing no secret;
 - corrupted, truncated, and foreign-recipient files fail with exit 3;
 - the `.env` parser is fuzzed — millions of executions, checking that names
   stay usable and that the source bytes are never altered.

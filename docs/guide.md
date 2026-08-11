@@ -13,17 +13,18 @@ and [Daily use](#daily-use). Everything after that is there when you need it.
 3. [Your first project](#your-first-project)
 4. [What to commit](#what-to-commit)
 5. [Daily use](#daily-use)
-6. [Changing a secret](#changing-a-secret)
-7. [Working with other people](#working-with-other-people)
-8. [Removing someone](#removing-someone)
-9. [Multiple environments](#multiple-environments)
-10. [Docker and Compose](#docker-and-compose)
-11. [Continuous integration](#continuous-integration)
-12. [Scripting envseal](#scripting-envseal)
-13. [Shell completion](#shell-completion)
-14. [The .env format](#the-env-format)
-15. [Exit codes](#exit-codes)
-16. [Troubleshooting](#troubleshooting)
+6. [Sharing through Git](#sharing-through-git)
+7. [Changing a secret](#changing-a-secret)
+8. [Working with other people](#working-with-other-people)
+9. [Removing someone](#removing-someone)
+10. [Multiple environments](#multiple-environments)
+11. [Docker and Compose](#docker-and-compose)
+12. [Continuous integration](#continuous-integration)
+13. [Scripting envseal](#scripting-envseal)
+14. [Shell completion](#shell-completion)
+15. [The .env format](#the-env-format)
+16. [Exit codes](#exit-codes)
+17. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -292,6 +293,123 @@ envseal decrypt -o - | grep DATABASE_URL
 Printing secrets straight to a terminal is refused, because they would sit in
 your scrollback and your terminal's buffer long after the command finished. If
 you truly want that, `--force` allows it.
+
+---
+
+## Sharing through Git
+
+`encrypt` and `decrypt` operate on files. `push` and `pull` operate on your
+**team**: they drive Git for you, so sharing an environment change is one
+command instead of four.
+
+```bash
+envseal push        # encrypt → git commit → git push
+envseal pull        # git pull → decrypt → summarize what changed
+```
+
+### push
+
+```
+$ envseal push
+Encrypted .env → .env.enc
+
+Will commit .env.enc and push to origin/main.
+Continue? [y/N] y
+Committed "Update environment"
+Pushed to origin/main
+```
+
+It asks first, because pushing reaches a remote and cannot be quietly undone.
+Pass `--yes` to skip the prompt in a script. Without a terminal **and** without
+`--yes`, envseal refuses rather than assuming consent — it will never push
+because nobody was there to say no.
+
+| Flag | Effect |
+|---|---|
+| `-m <msg>` | Commit message (default `Update environment`) |
+| `-y`, `--yes` | Skip confirmation |
+| `--no-push` | Commit locally, don't push |
+| `--no-commit` | Encrypt and stage only |
+
+**What push refuses to do:**
+
+- **Continues nothing if your plaintext `.env` is tracked by Git.** This is the
+  disaster the tool exists to prevent, so it stops before encrypting and tells
+  you to `git rm --cached .env` — and to treat those values as exposed, because
+  they are already in the repository history.
+- **Commits only `.env.enc` and `.envseal.yaml`.** If you have other work
+  staged, it stays staged. A secrets commit must never carry someone's
+  half-finished changes.
+- **Refuses on a detached HEAD or a branch with no upstream**, naming the exact
+  `git push -u` command to run.
+- **Refuses a merge conflict** in the encrypted file, explaining that ciphertext
+  cannot be line-merged.
+
+If the environment has not changed, push says so and creates no commit. This
+matters more than it sounds: age randomizes every encryption, so re-encrypting
+identical content produces a *different* file. Without that check, every push
+would add a meaningless whole-file diff to your history.
+
+### pull
+
+```
+$ envseal pull
+Updating 9b999cc..fca48db
+Fast-forward
+ .env.enc      | 14 ++++++++------
+ .envseal.yaml |  2 ++
+Decrypted .env.enc → .env
+
++ STRIPE_WEBHOOK_SECRET
+~ DATABASE_URL
+- OLD_API_KEY
+```
+
+The summary is the useful part: you can see that a teammate added one variable
+and changed another **without either of you exposing a value**.
+
+`pull` fast-forwards only. A divergent history needs a human decision, and a
+secrets tool should not be making it.
+
+| Flag | Effect |
+|---|---|
+| `-f`, `--force` | Overwrite a locally modified `.env` |
+| `--no-git` | Decrypt without fetching first |
+
+If your `.env` has been edited since the last sync, pull stops rather than
+discarding your work:
+
+```
+Error: .env has local changes
+
+It was modified after .env.enc, so overwriting it would discard your edits.
+
+Check:
+  • run `envseal push` to share your changes first
+  • pass --force to discard them
+```
+
+This is judged by modification time — a heuristic, not a guarantee. Git
+refreshes `.env.enc` when it pulls, so a `.env` newer than the ciphertext was
+almost certainly changed by hand.
+
+### Granting access with push
+
+Adding a recipient and re-encrypting is two commands:
+
+```bash
+envseal add alice age1lggy...
+envseal push
+```
+
+`push` notices that `.envseal.yaml` has uncommitted changes and re-encrypts for
+the new list, even when the environment values themselves are unchanged. Use
+`envseal rotate` when you want to re-encrypt without touching `.env` at all.
+
+### Outside a repository
+
+Both commands degrade gracefully. With no Git repository they behave as
+`encrypt` and `decrypt`, and say so.
 
 ---
 
@@ -637,6 +755,7 @@ lines, and ordering. Decrypting returns exactly what you encrypted.
 | `3` | Encryption or decryption failure |
 | `4` | Identity problem (missing, unreadable, invalid) |
 | `5` | Could not execute the child process |
+| `6` | Git operation failed (push, pull, commit) |
 
 With `envseal run`, a successful launch replaces this with **the child's own
 exit code**, so `envseal run -- sh -c 'exit 7'` exits 7. A child killed by a

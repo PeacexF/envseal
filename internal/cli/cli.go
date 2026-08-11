@@ -85,6 +85,8 @@ func NewRoot() *cobra.Command {
 		newInitCmd(a),
 		newEncryptCmd(a),
 		newDecryptCmd(a),
+		newPushCmd(a),
+		newPullCmd(a),
 		newRunCmd(a),
 		newAddCmd(a),
 		newRemoveCmd(a),

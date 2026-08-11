@@ -21,6 +21,7 @@ const (
 	CodeCrypto   Code = 3
 	CodeIdentity Code = 4
 	CodeProcess  Code = 5
+	CodeGit      Code = 6
 )
 
 type Error struct {

@@ -96,21 +96,38 @@ Add to `.gitignore`:
 
 ## Working with a team
 
-Alice runs `envseal init` and sends you her **public** key. You authorize it:
+Envseal synchronizes through Git itself. There is no server in the middle.
+
+```bash
+envseal push        # encrypt → commit → push
+envseal pull        # fetch → decrypt → summarize what changed
+```
+
+`push` shows what it will do and asks before committing. It refuses outright if
+your plaintext `.env` is tracked by Git, and it commits **only** the files it
+manages, so unrelated staged work is never swept into a secrets commit.
+
+`pull` reports what a teammate changed, by name and never by value:
+
+```
+Decrypted .env.enc → .env
+
++ STRIPE_WEBHOOK_SECRET
+~ DATABASE_URL
+```
+
+To add someone: Alice runs `envseal init` and sends you her **public** key.
 
 ```bash
 envseal add alice age1lggyhqrw2nlhcxprm67z43rta597azn8gknawjehu9d9dl0jq3yqqvfafg
-envseal rotate
-git commit -am "Grant alice access"
+envseal push
 ```
 
-`add` records the key; `rotate` re-encrypts for the current list. They are
-separate steps on purpose — editing a config file and re-encrypting every secret
-in the repository should not be one keystroke.
-
-Alice pulls and is productive immediately:
+`add` records the key; `push` notices the pending recipient change and
+re-encrypts for the new list. Alice pulls and is productive immediately:
 
 ```bash
+envseal pull
 envseal run -- ./server
 ```
 
@@ -132,6 +149,8 @@ temporary files. Use a dedicated CI identity, never a personal one. See
 | Command | Purpose |
 |---|---|
 | `envseal init` | Create your identity in `~/.envseal/identity` |
+| `envseal push` | Encrypt, commit, and push the environment |
+| `envseal pull` | Fetch and decrypt the shared environment |
 | `envseal encrypt [file]` | Encrypt `.env` for the project's recipients |
 | `envseal decrypt [file]` | Decrypt back to plaintext, `-o -` for stdout |
 | `envseal run [file] -- cmd` | Run a command with the decrypted environment |
@@ -144,7 +163,8 @@ temporary files. Use a dedicated CI identity, never a personal one. See
 Global flags: `--identity <path>`, `--quiet`.
 
 Exit codes: `0` success, `1` general, `2` configuration, `3` encryption,
-`4` identity, `5` process. `envseal run` returns the child's own exit code.
+`4` identity, `5` process, `6` git. `envseal run` returns the child's own exit
+code.
 
 ## What it does not do
 
